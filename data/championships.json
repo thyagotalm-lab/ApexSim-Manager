@@ -1,0 +1,372 @@
+[
+  {
+    "initialStages": [
+      {
+        "weather": "Pista Seca",
+        "trackCountry": "Bahrein",
+        "hasSprint": false,
+        "trackFlag": "🇧🇭",
+        "trackName": "Bahrain International Circuit (Sakhir)",
+        "format": "Quali 18min + Corrida 50%",
+        "date": "2026-10-11",
+        "time": "19:00 BRT",
+        "circuitLength": "5.412 km"
+      }
+    ],
+    "updatedAt": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1791308985,
+      "nanoseconds": 603000000
+    },
+    "isDeleted": false,
+    "stages": [
+      {
+        "weather": "Variável",
+        "id": "stage_1791049030559_1",
+        "trackCountry": "Hungria",
+        "circuitLength": "4.381 km",
+        "format": "Quali 18min + Corrida 50% (35 Voltas)",
+        "time": "19:00 BRT",
+        "date": "2026-10-11",
+        "hasSprint": false,
+        "status": "Em Breve",
+        "trackName": "Hungaroring (Mogyoród)",
+        "trackFlag": "🇭🇺",
+        "roundNumber": 1
+      },
+      {
+        "time": "19:00 BRT",
+        "circuitLength": "5.451 km",
+        "weather": "Variável",
+        "status": "Agendada",
+        "id": "stage_1791088586841",
+        "roundNumber": 2,
+        "trackName": "Shanghai International Circuit (Xangai)",
+        "trackFlag": "🇨🇳",
+        "format": "Quali 18min + Corrida 50% (28 Voltas)",
+        "hasSprint": false,
+        "trackCountry": "China",
+        "date": "2026-10-18"
+      },
+      {
+        "time": "19:00 BRT",
+        "status": "Agendada",
+        "trackFlag": "🇵🇹",
+        "trackName": "Autódromo Internacional do Algarve (Portimão)",
+        "id": "stage_1791088650371",
+        "circuitLength": "4.653 km",
+        "hasSprint": false,
+        "trackCountry": "Portugal",
+        "roundNumber": 3,
+        "weather": "Variável",
+        "date": "2026-10-25",
+        "format": "Quali 18min + Corrida 50% (33 Voltas)"
+      },
+      {
+        "trackCountry": "Estados Unidos",
+        "id": "stage_1791088680381",
+        "date": "2026-11-01",
+        "format": "Quali 18min + Corrida 50% (25 Voltas)",
+        "weather": "Variável",
+        "status": "Agendada",
+        "hasSprint": false,
+        "roundNumber": 4,
+        "time": "19:00 BRT",
+        "trackFlag": "🇺🇸",
+        "trackName": "Las Vegas Strip Circuit (Las Vegas)",
+        "circuitLength": "6.201 km"
+      },
+      {
+        "trackCountry": "Holanda",
+        "weather": "Variável",
+        "time": "19:00 BRT",
+        "format": "Quali 18min + Corrida 50% (36 Voltas)",
+        "id": "stage_1791088710773",
+        "status": "Agendada",
+        "roundNumber": 5,
+        "date": "2026-11-08",
+        "circuitLength": "4.259 km",
+        "hasSprint": false,
+        "trackName": "Circuit Zandvoort (Zandvoort)",
+        "trackFlag": "🇳🇱"
+      },
+      {
+        "format": "Quali 18min + Corrida 50% (33 Voltas)",
+        "roundNumber": 6,
+        "trackName": "Circuit de Barcelona-Catalunya (Montmeló)",
+        "trackFlag": "🇪🇸",
+        "date": "2026-11-15",
+        "hasSprint": false,
+        "trackCountry": "Espanha",
+        "time": "19:00 BRT",
+        "id": "stage_1791088754006",
+        "circuitLength": "4.657 km",
+        "weather": "Variável",
+        "status": "Agendada"
+      },
+      {
+        "hasSprint": false,
+        "trackFlag": "🇮🇹",
+        "id": "stage_1791088779143",
+        "trackName": "Autodromo Enzo e Dino Ferrari (Ímola)",
+        "format": "Quali 18min + Corrida 50% (32 Voltas)",
+        "trackCountry": "Itália",
+        "time": "19:00 BRT",
+        "weather": "Variável",
+        "date": "2026-11-22",
+        "status": "Agendada",
+        "roundNumber": 7,
+        "circuitLength": "4.909 km"
+      },
+      {
+        "circuitLength": "5.281 km",
+        "format": "Quali 18min + Corrida 50% (29 Voltas)",
+        "trackCountry": "Emirados Árabes Unidos",
+        "weather": "Variável",
+        "date": "2026-10-05",
+        "roundNumber": 8,
+        "time": "19:00 BRT",
+        "hasSprint": false,
+        "trackName": "Yas Marina Circuit (Abu Dhabi)",
+        "trackFlag": "🇦🇪",
+        "trackMapStyle": "broadcast",
+        "status": "Agendada",
+        "id": "stage_1791173401456"
+      }
+    ],
+    "season": "4",
+    "adminIds": [
+      "user_thyago_talm",
+      "user_1791059250116_2cmb"
+    ],
+    "simulator": "F1 24",
+    "rulesDoc": "",
+    "registrations": [
+      {
+        "discord": "Snectt/92982554529",
+        "carModel": "Ferrari SF-24",
+        "steamGuid": "RDX-snectt77",
+        "userName": "Snectt77",
+        "carNumber": 77,
+        "id": "reg_1791059301139_x3bx",
+        "userId": "user_1791059250116_2cmb",
+        "isReserve": false,
+        "status": "APROVADO",
+        "teamName": "Scuderia Ferrari",
+        "registeredAt": "2026-10-03T20:28:21.139Z",
+        "userEmail": "brunogabriel2103@gmail.com"
+      },
+      {
+        "userName": "Thyago  Moura",
+        "steamGuid": "RDX-Thyago",
+        "carModel": "Red Bull RB20",
+        "carNumber": 21,
+        "id": "reg_1791082347137_igp0",
+        "discord": "",
+        "teamName": "Oracle Red Bull Racing",
+        "userId": "user_thyago_talm",
+        "userEmail": "thyago.talm@gmail.com",
+        "registeredAt": "2026-10-04T02:52:27.137Z",
+        "status": "APROVADO"
+      },
+      {
+        "status": "APROVADO",
+        "userEmail": "pablopaulino53@gmail.com",
+        "userName": "Pablo Paulino",
+        "registeredAt": "2026-10-04T03:13:23.750Z",
+        "id": "reg_1791083603748_kv1k",
+        "userId": "user_1791083216903_vh80",
+        "discord": "84991192302",
+        "carModel": "VCARB 01",
+        "carNumber": 95,
+        "steamGuid": "Robozinho_11",
+        "teamName": "Visa Cash App RB Formula One Team"
+      },
+      {
+        "isReserve": false,
+        "status": "APROVADO",
+        "id": "reg_1791282820475_jbwy",
+        "teamName": "BWT Alpine F1 Team",
+        "userId": "user_1791106858250_vu04",
+        "userEmail": "diegocr77alesson@gmail.com",
+        "userName": "Alessondiego",
+        "carModel": "Alpine A524",
+        "steamGuid": "Ale_diego7",
+        "discord": "",
+        "registeredAt": "2026-10-06T10:33:40.475Z",
+        "carNumber": 19
+      }
+    ],
+    "status": "Inscrições Abertas",
+    "maxGrid": 20,
+    "name": "RDX League F1 24",
+    "recurrence": "Semanal",
+    "trackBgColor": "from-red-950/70 to-slate-900",
+    "defaultRaceDay": "Domingo",
+    "createdAt": "2026-10-03T17:37:10.559Z",
+    "adminEmails": [
+      "thyago.talm@gmail.com",
+      "brunogabriel2103@gmail.com"
+    ],
+    "description": "Campeonato oficial organizado por RDX Team.",
+    "id": "champ_1791049030559",
+    "scoringRule": {
+      "dropWorstRounds": 0,
+      "poleBonus": 0,
+      "name": "Sistema Personalizado (15 posições)",
+      "fastestLapBonus": 1,
+      "positions": [
+        33,
+        28,
+        25,
+        22,
+        20,
+        18,
+        16,
+        14,
+        12,
+        10,
+        8,
+        6,
+        4,
+        2,
+        1
+      ]
+    },
+    "slug": "rdx-league-f1-24",
+    "category": "Formula 1"
+  },
+  {
+    "simulator": "F1 26",
+    "season": "1",
+    "scoringRule": {
+      "name": "Sistema Oficial (10 Posições)",
+      "positions": [
+        25,
+        18,
+        15,
+        12,
+        10,
+        8,
+        6,
+        4,
+        2,
+        1
+      ],
+      "dropWorstRounds": 0,
+      "poleBonus": 0,
+      "fastestLapBonus": 0
+    },
+    "status": "Inscrições Abertas",
+    "trackBgColor": "from-red-950/70 to-slate-900",
+    "updatedAt": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1791395176,
+      "nanoseconds": 255000000
+    },
+    "adminEmails": [
+      "thyago.talm@gmail.com",
+      "fabiojl2612@gmail.com"
+    ],
+    "maxGrid": 26,
+    "category": "Formula 1",
+    "description": "Organizado por Formula Sim Racing Brasil, 2026.",
+    "isDeleted": false,
+    "stages": [
+      {
+        "weather": "Variável",
+        "format": "Quali 18min + Corrida 50%",
+        "time": "22:00 BRT",
+        "roundNumber": 1,
+        "sprintFormat": "Sprint Shootout + Corrida Sprint 100km (15 voltas)",
+        "status": "Em Breve",
+        "circuitLength": "5.412 km",
+        "id": "stage_1791389197984_1",
+        "hasSprint": true,
+        "trackCountry": "Bahrein",
+        "trackName": "Bahrain International Circuit (Sakhir)",
+        "trackFlag": "🇧🇭",
+        "date": "2026-10-12"
+      }
+    ],
+    "slug": "formula-sim-racing-brasil",
+    "registrations": [],
+    "defaultRaceDay": "Segunda-feira",
+    "recurrence": "Semanal",
+    "id": "champ_1791389197984",
+    "adminIds": [
+      "user_thyago_talm",
+      "user_1791393742372_tjir"
+    ],
+    "initialStages": [
+      {
+        "format": "Quali 18min + Corrida 50%",
+        "date": "2026-10-12",
+        "weather": "Pista Seca",
+        "trackCountry": "Bahrein",
+        "hasSprint": false,
+        "time": "22:00 BRT",
+        "circuitLength": "5.412 km",
+        "trackName": "Bahrain International Circuit (Sakhir)",
+        "trackFlag": "🇧🇭"
+      }
+    ],
+    "rulesDoc": "Organizado por Formula Sim Racing Brasil, 2026.",
+    "createdAt": "2026-10-07T16:06:37.984Z",
+    "name": "FORMULA SIM RACING BRASIL"
+  },
+  {
+    "name": "FORMULA SIM RACING BRASIL",
+    "slug": "formula-sim-racing-brasil",
+    "description": "Campeonato oficial organizado na plataforma ApexSim Manager.",
+    "simulator": "F1 24",
+    "category": "Formula 1",
+    "season": "5",
+    "status": "Inscrições Abertas",
+    "maxGrid": 20,
+    "trackBgColor": "from-red-950/70 to-slate-900",
+    "adminIds": [
+      "user_thyago_talm"
+    ],
+    "adminEmails": [
+      "thyago.talm@gmail.com"
+    ],
+    "scoringRule": {
+      "name": "Sistema Oficial (10 Posições)",
+      "positions": [
+        25,
+        18,
+        15,
+        12,
+        10,
+        8,
+        6,
+        4,
+        2,
+        1
+      ],
+      "poleBonus": 0,
+      "fastestLapBonus": 1,
+      "dropWorstRounds": 0
+    },
+    "defaultRaceDay": "Terça-feira",
+    "recurrence": "Semanal",
+    "initialStages": [
+      {
+        "trackName": "Bahrain International Circuit (Sakhir)",
+        "trackCountry": "Bahrein",
+        "trackFlag": "🇧🇭",
+        "circuitLength": "5.412 km",
+        "date": "2026-10-06",
+        "time": "22:00 BRT",
+        "format": "Quali 18min + Corrida 50%",
+        "weather": "Pista Seca",
+        "hasSprint": false
+      }
+    ],
+    "id": "champ_1790950557278",
+    "createdAt": "2026-10-02T14:15:57.278Z",
+    "registrations": [],
+    "stages": []
+  }
+]

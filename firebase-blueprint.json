@@ -1,0 +1,51 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Perfil de usuário e piloto registrado no ApexSim Manager",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "avatar": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "pilot", "steward"] },
+        "country": { "type": "string" },
+        "racingNumber": { "type": "number" },
+        "driverCategory": { "type": "string" },
+        "gamingPlatform": { "type": "string" },
+        "gamingId": { "type": "string" },
+        "steamId": { "type": "string" },
+        "discordTag": { "type": "string" },
+        "administeredLeagueIds": { "type": "array" }
+      },
+      "required": ["id", "name", "email"]
+    },
+    "Championship": {
+      "title": "Championship",
+      "description": "Campeonato com etapas, pilotos inscritos e regras de pontuação",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "simulator": { "type": "string" },
+        "category": { "type": "string" },
+        "season": { "type": "string" },
+        "status": { "type": "string" },
+        "adminIds": { "type": "array" }
+      },
+      "required": ["id", "name"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Coleção de todos os usuários registrados no aplicativo"
+    },
+    "/championships/{championshipId}": {
+      "schema": "Championship",
+      "description": "Coleção de campeonatos do ApexSim"
+    }
+  }
+}
