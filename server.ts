@@ -608,7 +608,11 @@ app.post('/api/notifications/clear', (req, res) => {
 
 // Serve frontend with Vite middlewares in dev, or static files in production
 async function startServer() {
-  if (process.env.NODE_ENV === 'production' && fs.existsSync(path.resolve(__dirname, 'dist'))) {
+  if (fs.existsSync(path.resolve(__dirname, 'public'))) {
+    app.use(express.static(path.resolve(__dirname, 'public')));
+  }
+  const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync(path.resolve(__dirname, 'dist', 'index.html'));
+  if (isProduction && fs.existsSync(path.resolve(__dirname, 'dist'))) {
     app.use(express.static(path.resolve(__dirname, 'dist')));
     app.get('*', (req, res) => {
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
@@ -616,7 +620,7 @@ async function startServer() {
   } else {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { middlewareMode: true, allowedHosts: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
