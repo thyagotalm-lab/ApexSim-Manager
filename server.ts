@@ -402,7 +402,7 @@ app.post('/api/users/sync', (req, res) => {
 // API: Update user
 app.put('/api/users/:id', (req, res) => {
   const { id } = req.params;
-  const updates = req.body;
+  const updates = req.body || {};
   const users = readUsersFromFile();
   const idx = users.findIndex((u) => u.id === id);
 
@@ -411,15 +411,75 @@ app.put('/api/users/:id', (req, res) => {
   }
 
   const isThyago = users[idx].email.toLowerCase().trim() === 'thyago.talm@gmail.com';
-  users[idx] = {
+
+  // Security: Email and Password cannot be modified through master profile updates
+  delete updates.email;
+  delete updates.password;
+
+  const targetNewId = (updates.newId || updates.id || id).toString().trim();
+
+  // If changing ID:
+  if (targetNewId !== id) {
+    if (isThyago) {
+      return res.status(403).json({ success: false, error: 'O ID do Admin Master Root é protegido e não pode ser alterado.' });
+    }
+    // Check collision
+    const collision = users.some((u) => u.id === targetNewId && u.id !== id);
+    if (collision) {
+      return res.status(400).json({ success: false, error: `O ID "${targetNewId}" já está em uso por outro usuário.` });
+    }
+  }
+
+  const updatedId = (!isThyago && targetNewId) ? targetNewId : id;
+
+  const updatedUser = {
     ...users[idx],
     ...updates,
+    id: updatedId,
     role: isThyago ? 'admin' : (updates.role || users[idx].role || 'pilot'),
     administeredLeagueIds: updates.administeredLeagueIds !== undefined ? updates.administeredLeagueIds : (users[idx].administeredLeagueIds || []),
+    stats: updates.stats ? { ...users[idx].stats, ...updates.stats } : users[idx].stats,
   };
 
+  users[idx] = updatedUser;
   writeUsersToFile(users);
-  res.json({ success: true, user: users[idx], users });
+
+  // If ID or name changed, propagate to all championships registrations & adminIds
+  if (updatedId !== id || updates.name) {
+    try {
+      const champs = readChampionshipsFromFile();
+      let champModified = false;
+
+      champs.forEach((champ: any) => {
+        if (Array.isArray(champ.registrations)) {
+          champ.registrations.forEach((reg: any) => {
+            if (reg.userId === id) {
+              reg.userId = updatedId;
+              if (updates.name && updates.name.trim()) {
+                reg.userName = updates.name.trim();
+              }
+              champModified = true;
+            }
+          });
+        }
+        if (Array.isArray(champ.adminIds)) {
+          const aIdx = champ.adminIds.indexOf(id);
+          if (aIdx >= 0) {
+            champ.adminIds[aIdx] = updatedId;
+            champModified = true;
+          }
+        }
+      });
+
+      if (champModified) {
+        writeChampionshipsToFile(champs);
+      }
+    } catch (champErr) {
+      console.error('Error updating championships references for user:', champErr);
+    }
+  }
+
+  res.json({ success: true, user: updatedUser, users });
 });
 
 // API: Delete user permanently across all server records

@@ -9,6 +9,8 @@ import {
   syncBackendWithFirestore,
   deleteUserCompletely,
   sanitizeUserProfileTeams,
+  adminUpdatePilotProfileService,
+  fetchBackendUsers,
 } from '../services/userService';
 
 interface AuthContextType {
@@ -37,6 +39,7 @@ interface AuthContextType {
   resetPilotStats: (userId: string) => void;
   syncUsers: () => Promise<void>;
   deleteUserAccountPermanently: (userId: string) => Promise<{ success: boolean; message: string }>;
+  adminUpdatePilotProfile: (oldId: string, updatedData: Partial<User>) => Promise<{ success: boolean; user?: User; error?: string }>;
   isAuthModalOpen: boolean;
   openAuthModal: () => void;
   closeAuthModal: () => void;
@@ -121,8 +124,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-  // Real-time synchronization via Firestore
+  // Real-time synchronization via Firestore and immediate Backend population
   useEffect(() => {
+    // 1. Immediately fetch from backend API /api/users to guarantee all created accounts appear without waiting
+    fetchBackendUsers().then((backendUsers) => {
+      if (backendUsers && backendUsers.length > 0) {
+        setUsers((prev) => {
+          const map = new Map<string, User>();
+          backendUsers.forEach((u) => map.set(u.email.toLowerCase().trim(), u));
+          prev.forEach((u) => {
+            const key = u.email.toLowerCase().trim();
+            if (!map.has(key) && !isFakeMockUser(u)) {
+              map.set(key, u);
+            }
+          });
+          return Array.from(map.values()).map(sanitizeUserProfileTeams);
+        });
+      }
+    });
+
     const unsubscribe = subscribeToUsers((firestoreUsers) => {
       if (firestoreUsers && firestoreUsers.length > 0) {
         // Enforce clean zeroed stats and 3000 Sim Rating for Thyago
@@ -422,6 +442,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return res;
   };
 
+  const adminUpdatePilotProfile = async (
+    oldId: string,
+    updatedData: Partial<User>
+  ): Promise<{ success: boolean; user?: User; error?: string }> => {
+    const res = await adminUpdatePilotProfileService(oldId, updatedData);
+    if (res.success && res.user) {
+      const sanitized = sanitizeUserProfileTeams(res.user);
+      setUsers((prev) => {
+        const withoutOld = prev.filter((u) => u.id !== oldId && u.id !== sanitized.id);
+        return [sanitized, ...withoutOld];
+      });
+      if (currentUser?.id === oldId) {
+        setCurrentUser(sanitized);
+      }
+      try {
+        const cached = localStorage.getItem('apexsim_users_db');
+        if (cached) {
+          const parsed: User[] = JSON.parse(cached);
+          const filtered = parsed.filter((u) => u.id !== oldId && u.id !== sanitized.id);
+          localStorage.setItem('apexsim_users_db', JSON.stringify([sanitized, ...filtered]));
+        }
+      } catch (_) {}
+    }
+    return res;
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -436,6 +482,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resetPilotStats,
         syncUsers,
         deleteUserAccountPermanently,
+        adminUpdatePilotProfile,
         isAuthModalOpen,
         openAuthModal: () => setIsAuthModalOpen(true),
         closeAuthModal: () => setIsAuthModalOpen(false),

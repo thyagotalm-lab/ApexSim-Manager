@@ -315,5 +315,63 @@
       "simRating": 3000
     },
     "updatedAt": "2026-10-08T02:34:31.116Z"
+  },
+  {
+    "id": "user_1791427094969_h3xz",
+    "name": "Lucas Alves",
+    "email": "lucasalveslk333@outlook.com",
+    "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250",
+    "role": "pilot",
+    "gamingPlatform": "Steam (PC)",
+    "gamingId": "RDX-Lk",
+    "steamId": "RDX-Lk",
+    "discordTag": "",
+    "country": "Brasil 🇧🇷",
+    "racingNumber": 33,
+    "driverCategory": "Pro",
+    "teamName": "",
+    "teamTag": "",
+    "administeredLeagueIds": [],
+    "stats": {
+      "races": 0,
+      "wins": 0,
+      "podiums": 0,
+      "poles": 0,
+      "fastestLaps": 0,
+      "points": 0,
+      "dnfs": 0,
+      "safetyRating": "B 3.50",
+      "simRating": 3000
+    },
+    "updatedAt": "2026-10-08T17:01:33.112Z"
+  },
+  {
+    "id": "user_1791477256916_ze4q",
+    "name": "Fabio Batista",
+    "email": "fabiojl2612@gmail.com",
+    "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250",
+    "role": "pilot",
+    "gamingPlatform": "Steam (PC)",
+    "gamingId": "FB_MANAUS",
+    "steamId": "FB_MANAUS",
+    "discordTag": "fabiojl2612",
+    "country": "Brasil 🇧🇷",
+    "racingNumber": 22,
+    "driverCategory": "Pro",
+    "teamName": "",
+    "teamTag": "",
+    "administeredLeagueIds": [],
+    "stats": {
+      "races": 0,
+      "wins": 0,
+      "podiums": 0,
+      "poles": 0,
+      "fastestLaps": 0,
+      "points": 0,
+      "dnfs": 0,
+      "safetyRating": "B 3.50",
+      "simRating": 3000
+    },
+    "updatedAt": "2026-10-08T17:01:33.112Z"
   }
 ]

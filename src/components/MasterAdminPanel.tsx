@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Crown,
   Shield,
@@ -22,19 +22,21 @@ import {
   ArrowUpDown,
   Car,
   ExternalLink,
+  Pencil,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
 import { User } from '../types';
 import { getSimRatingTier } from '../utils/simRating';
 import { CountryFlag } from './CountryFlag';
+import { isFakeMockUser } from '../services/userService';
 
 interface MasterAdminPanelProps {
   onNavigateToTab?: (tab: any) => void;
 }
 
 export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateToTab }) => {
-  const { currentUser, users, syncUsers, deleteUserAccountPermanently } = useAuth();
+  const { currentUser, users, syncUsers, deleteUserAccountPermanently, adminUpdatePilotProfile } = useAuth();
   const { championships } = useChampionships();
 
   // Search & Filters
@@ -52,6 +54,87 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteStepText, setDeleteStepText] = useState('');
   const [alertFeedback, setAlertFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Pilot Profile Editing States
+  const [userToEdit, setUserToEdit] = useState<User | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editId, setEditId] = useState('');
+  const [editTeamName, setEditTeamName] = useState('');
+  const [editTeamTag, setEditTeamTag] = useState('');
+  const [editGamingPlatform, setEditGamingPlatform] = useState('Steam (PC)');
+  const [editGamingId, setEditGamingId] = useState('');
+  const [editCountry, setEditCountry] = useState('Brasil 🇧🇷');
+  const [editDiscordTag, setEditDiscordTag] = useState('');
+  const [editRacingNumber, setEditRacingNumber] = useState<number>(1);
+  const [editSimRating, setEditSimRating] = useState<number>(3000);
+  const [editRole, setEditRole] = useState<'pilot' | 'admin'>('pilot');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Automatically sync on initial load to ensure all accounts created appear immediately
+  useEffect(() => {
+    syncUsers();
+  }, []);
+
+  // Consolidate all users from AuthContext + any pilots registered in championships
+  const allConsolidatedUsers = useMemo(() => {
+    const map = new Map<string, User>();
+
+    // 1. Add all users from AuthContext
+    users.forEach((u) => {
+      if (!isFakeMockUser(u)) {
+        if (u.id) map.set(u.id, u);
+        if (u.email) map.set(u.email.toLowerCase().trim(), u);
+      }
+    });
+
+    // 2. Add any registered pilots from championships to guarantee zero missing accounts
+    championships.forEach((c) => {
+      (c.registrations || []).forEach((reg) => {
+        const emailKey = (reg.userEmail || '').toLowerCase().trim();
+        const existing = (reg.userId && map.get(reg.userId)) || (emailKey && map.get(emailKey));
+        if (!existing) {
+          const regAny = reg as any;
+          const synthetic: User = {
+            id: reg.userId || `user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            name: reg.userName || (reg.userEmail ? reg.userEmail.split('@')[0] : 'Piloto'),
+            email: reg.userEmail || `${(reg.userName || 'piloto').toLowerCase().replace(/\s+/g, '')}@piloto.apex`,
+            avatar: regAny.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250',
+            role: 'pilot',
+            country: regAny.country || 'Brasil 🇧🇷',
+            racingNumber: reg.carNumber || 1,
+            discordTag: reg.discord || '',
+            steamId: reg.steamGuid || '',
+            gamingId: reg.steamGuid || '',
+            gamingPlatform: regAny.platform || 'Steam (PC)',
+            teamName: '',
+            teamTag: '',
+            administeredLeagueIds: [],
+            stats: {
+              races: 0,
+              wins: 0,
+              podiums: 0,
+              poles: 0,
+              fastestLaps: 0,
+              points: 0,
+              dnfs: 0,
+              safetyRating: 'B 3.50',
+              simRating: 3000,
+            },
+          };
+          map.set(synthetic.id, synthetic);
+          if (synthetic.email) map.set(synthetic.email.toLowerCase().trim(), synthetic);
+        }
+      });
+    });
+
+    const uniqueMap = new Map<string, User>();
+    map.forEach((u) => {
+      uniqueMap.set(u.id, u);
+    });
+
+    return Array.from(uniqueMap.values());
+  }, [users, championships]);
 
   // Security Check: strictly restrict to thyago.talm@gmail.com
   const isMasterAdmin = currentUser?.email?.toLowerCase().trim() === 'thyago.talm@gmail.com';
@@ -122,9 +205,91 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
     ).length;
   };
 
+  // Open Edit Modal
+  const handleOpenEdit = (user: User) => {
+    setUserToEdit(user);
+    setEditName(user.name || '');
+    setEditId(user.id || '');
+    setEditTeamName(user.teamName || '');
+    setEditTeamTag(user.teamTag || '');
+    setEditGamingPlatform(user.gamingPlatform || 'Steam (PC)');
+    setEditGamingId(user.gamingId || user.steamId || '');
+    setEditCountry(user.country || 'Brasil 🇧🇷');
+    setEditDiscordTag(user.discordTag || '');
+    setEditRacingNumber(user.racingNumber || 1);
+    setEditSimRating(user.stats?.simRating || 3000);
+    setEditRole(user.role === 'admin' ? 'admin' : 'pilot');
+    setEditError(null);
+  };
+
+  // Submit Pilot Edit Form
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userToEdit) return;
+    if (!editName.trim()) {
+      setEditError('Nome e sobrenome são obrigatórios.');
+      return;
+    }
+    if (!editId.trim()) {
+      setEditError('O ID do usuário não pode ficar vazio.');
+      return;
+    }
+
+    try {
+      setIsSavingEdit(true);
+      setEditError(null);
+
+      const isThyago = userToEdit.email.toLowerCase().trim() === 'thyago.talm@gmail.com';
+
+      const updatedData: Partial<User> = {
+        name: editName.trim(),
+        id: isThyago ? 'user_thyago_talm' : editId.trim(),
+        teamName: editTeamName.trim(),
+        teamTag: editTeamTag.trim().toUpperCase(),
+        gamingPlatform: editGamingPlatform,
+        gamingId: editGamingId.trim(),
+        steamId: editGamingId.trim(),
+        country: editCountry.trim(),
+        discordTag: editDiscordTag.trim(),
+        racingNumber: Number(editRacingNumber) || 1,
+        role: isThyago ? 'admin' : editRole,
+        stats: {
+          ...(userToEdit.stats || {
+            races: 0,
+            wins: 0,
+            podiums: 0,
+            poles: 0,
+            fastestLaps: 0,
+            points: 0,
+            dnfs: 0,
+            safetyRating: 'B 3.50',
+            simRating: 3000,
+          }),
+          simRating: Number(editSimRating) || 3000,
+        },
+      };
+
+      const res = await adminUpdatePilotProfile(userToEdit.id, updatedData);
+      if (!res.success) {
+        throw new Error(res.error || 'Falha ao atualizar dados do piloto.');
+      }
+
+      setAlertFeedback({
+        type: 'success',
+        message: `Perfil do piloto "${editName.trim()}" atualizado com sucesso em todos os bancos de dados!`,
+      });
+      setUserToEdit(null);
+      setTimeout(() => setAlertFeedback(null), 5000);
+    } catch (err: any) {
+      setEditError(err.message || 'Erro ao salvar alterações do piloto.');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
   // Filtered & Sorted Users
   const filteredUsers = useMemo(() => {
-    return users.filter((u) => {
+    return allConsolidatedUsers.filter((u) => {
       // Search term match
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -167,7 +332,7 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
       if (b.email.toLowerCase().trim() === 'thyago.talm@gmail.com') return 1;
       return b.id.localeCompare(a.id);
     });
-  }, [users, searchQuery, roleFilter, platformFilter, sortBy]);
+  }, [allConsolidatedUsers, searchQuery, roleFilter, platformFilter, sortBy]);
 
   // Execute Complete Purge
   const handleConfirmDelete = async () => {
@@ -208,8 +373,8 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
     }
   };
 
-  const totalPilots = users.filter((u) => u.role !== 'admin' && u.email.toLowerCase().trim() !== 'thyago.talm@gmail.com').length;
-  const totalAdmins = users.filter((u) => u.role === 'admin' || u.email.toLowerCase().trim() === 'thyago.talm@gmail.com').length;
+  const totalPilots = allConsolidatedUsers.filter((u) => u.role !== 'admin' && u.email.toLowerCase().trim() !== 'thyago.talm@gmail.com').length;
+  const totalAdmins = allConsolidatedUsers.filter((u) => u.role === 'admin' || u.email.toLowerCase().trim() === 'thyago.talm@gmail.com').length;
 
   return (
     <div className="space-y-6">
@@ -252,11 +417,11 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white font-display tracking-tight flex items-center gap-3">
-              <span>Gestão Global de Contas & Purga de Dados</span>
+              <span>Gestão Global de Contas & Pilotos</span>
             </h1>
 
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
-              Painel exclusivo para visualizar todas as contas cadastradas na plataforma e realizar a exclusão total e definitiva de registros em todos os bancos de dados (Firebase Firestore, Backend Local e Inscrições em Campeonatos).
+              Painel exclusivo para visualizar, editar perfis de pilotos (Nome, ID, Equipe, Stats) e realizar a exclusão definitiva de registros em todos os bancos de dados (Firebase Firestore, Backend Local e Inscrições em Campeonatos).
             </p>
           </div>
 
@@ -294,7 +459,7 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
             <Users className="w-4 h-4 text-amber-400" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-black text-white font-mono">{users.length}</span>
+            <span className="text-2xl sm:text-3xl font-black text-white font-mono">{allConsolidatedUsers.length}</span>
             <span className="text-[11px] text-slate-400">cadastradas</span>
           </div>
           <div className="mt-2 text-[10px] text-slate-500 flex items-center gap-1">
@@ -371,7 +536,7 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar por Nome Real, E-mail, ID, Time, Sigla, Steam ID ou Plataforma..."
+              placeholder="Buscar por Nome, E-mail, ID, Time, Sigla, Steam ID ou Plataforma..."
               className="w-full bg-slate-950 border border-slate-700/80 focus:border-amber-500 rounded-xl pl-10 pr-10 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors shadow-inner"
             />
             {searchQuery && (
@@ -426,7 +591,7 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
         <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-800/80">
           <span>
             Exibindo <strong className="text-white font-mono">{filteredUsers.length}</strong> de{' '}
-            <strong className="text-white font-mono">{users.length}</strong> contas registradas
+            <strong className="text-white font-mono">{allConsolidatedUsers.length}</strong> contas registradas
           </span>
           {(searchQuery || roleFilter !== 'ALL' || platformFilter !== 'ALL') && (
             <button
@@ -443,26 +608,31 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
         </div>
       </div>
 
-      {/* Accounts Table & Responsive Cards */}
+      {/* Accounts List Container (Clean Table on Desktop, Responsive Cards on Mobile - NO HORIZONTAL SCROLL) */}
       <div className="rounded-2xl border border-slate-800 bg-[#0c121e] overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-300">
+        {/* Desktop View: Full Width Table with fixed columns, zero horizontal overflow */}
+        <div className="hidden md:block w-full">
+          <table className="w-full text-left text-xs text-slate-300 table-fixed">
+            <colgroup>
+              <col className="w-[32%]" />
+              <col className="w-[28%]" />
+              <col className="w-[22%]" />
+              <col className="w-[6%]" />
+              <col className="w-[12%]" />
+            </colgroup>
             <thead className="bg-slate-900/90 text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800 font-semibold">
               <tr>
-                <th className="py-3.5 px-4">Piloto / Conta</th>
-                <th className="py-3.5 px-3">E-mail</th>
-                <th className="py-3.5 px-3">Time & Sigla</th>
-                <th className="py-3.5 px-3">Plataforma & ID</th>
-                <th className="py-3.5 px-3">Sim Rating</th>
-                <th className="py-3.5 px-3 text-center">Ligas</th>
-                <th className="py-3.5 px-3">Papel</th>
-                <th className="py-3.5 px-4 text-right">Ações do Master</th>
+                <th className="py-3 px-4">Piloto & Identificação</th>
+                <th className="py-3 px-3">Acesso & Plataforma</th>
+                <th className="py-3 px-3">Equipe & Rating</th>
+                <th className="py-3 px-2 text-center">Ligas</th>
+                <th className="py-3 px-4 text-right">Ações do Master</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60 font-sans">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-500">
+                  <td colSpan={5} className="py-12 text-center text-slate-500">
                     <Users className="w-8 h-8 mx-auto mb-2 opacity-40" />
                     Nenhuma conta encontrada com os critérios informados.
                   </td>
@@ -480,10 +650,10 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
                         isThyago ? 'bg-amber-500/[0.03] border-l-4 border-l-amber-500' : ''
                       }`}
                     >
-                      {/* Name & Avatar */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="relative">
+                      {/* Name, Avatar, Role & ID */}
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="relative shrink-0">
                             <img
                               src={user.avatar}
                               alt={user.name}
@@ -501,22 +671,31 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
                               </span>
                             )}
                           </div>
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <div className="font-bold text-white text-xs sm:text-sm flex items-center gap-1.5 truncate">
                               <span className="truncate">{user.name}</span>
                               {user.country && <CountryFlag country={user.country} size="xs" />}
+                              {isThyago ? (
+                                <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold text-[9px] uppercase tracking-wider shrink-0 border border-amber-500/40">
+                                  Master
+                                </span>
+                              ) : user.role === 'admin' ? (
+                                <span className="px-1.5 py-0.2 rounded bg-red-950/80 text-red-300 font-semibold text-[9px] uppercase shrink-0 border border-red-800/60">
+                                  Admin
+                                </span>
+                              ) : null}
                             </div>
-                            <div className="text-[10px] text-slate-500 font-mono truncate flex items-center gap-1">
-                              <span>ID: {user.id.substring(0, 16)}...</span>
+                            <div className="text-[10px] text-slate-400 font-mono truncate flex items-center gap-1 mt-0.5">
+                              <span className="truncate" title={user.id}>ID: {user.id}</span>
                               <button
                                 onClick={() => handleCopy(user.id, `id_${user.id}`)}
                                 title="Copiar ID Completo"
-                                className="hover:text-amber-400 p-0.5 cursor-pointer"
+                                className="hover:text-amber-400 p-0.5 cursor-pointer shrink-0"
                               >
                                 {copiedId === `id_${user.id}` ? (
                                   <Check className="w-2.5 h-2.5 text-emerald-400" />
                                 ) : (
-                                  <Copy className="w-2.5 h-2.5" />
+                                  <Copy className="w-2.5 h-2.5 text-slate-500" />
                                 )}
                               </button>
                             </div>
@@ -524,96 +703,86 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
                         </div>
                       </td>
 
-                      {/* Email */}
-                      <td className="py-3.5 px-3">
-                        <div className="flex items-center gap-1.5 text-slate-300 font-mono text-[11px]">
-                          <span className="truncate max-w-[200px]" title={user.email}>
-                            {user.email}
-                          </span>
-                          <button
-                            onClick={() => handleCopy(user.email, `email_${user.id}`)}
-                            title="Copiar E-mail"
-                            className="hover:text-amber-400 p-0.5 cursor-pointer shrink-0"
-                          >
-                            {copiedId === `email_${user.id}` ? (
-                              <Check className="w-2.5 h-2.5 text-emerald-400" />
-                            ) : (
-                              <Copy className="w-2.5 h-2.5 text-slate-500" />
+                      {/* Email, Platform & Gaming ID */}
+                      <td className="py-3 px-3">
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-1.5 text-slate-200 font-mono text-[11px] truncate">
+                            <span className="truncate" title={user.email}>
+                              {user.email}
+                            </span>
+                            <button
+                              onClick={() => handleCopy(user.email, `email_${user.id}`)}
+                              title="Copiar E-mail"
+                              className="hover:text-amber-400 p-0.5 cursor-pointer shrink-0"
+                            >
+                              {copiedId === `email_${user.id}` ? (
+                                <Check className="w-2.5 h-2.5 text-emerald-400" />
+                              ) : (
+                                <Copy className="w-2.5 h-2.5 text-slate-500" />
+                              )}
+                            </button>
+                          </div>
+                          <div className="text-[10px] text-slate-400 truncate flex items-center gap-1">
+                            <span className="text-slate-500">{user.gamingPlatform || 'Steam (PC)'}</span>
+                            {(user.gamingId || user.steamId) && (
+                              <>
+                                <span className="text-slate-600">·</span>
+                                <span className="font-mono text-slate-400 truncate" title={user.gamingId || user.steamId}>
+                                  {user.gamingId || user.steamId}
+                                </span>
+                              </>
                             )}
-                          </button>
+                          </div>
                         </div>
                       </td>
 
-                      {/* Team & Tag */}
-                      <td className="py-3.5 px-3">
-                        {user.teamName ? (
-                          <div className="flex items-center gap-1.5 truncate max-w-[170px]">
-                            {user.teamTag && (
-                              <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-amber-400 font-mono text-[10px] font-bold shrink-0">
-                                {user.teamTag}
-                              </span>
+                      {/* Team & Sim Rating */}
+                      <td className="py-3 px-3">
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex items-center gap-1.5 truncate">
+                            {user.teamName ? (
+                              <>
+                                {user.teamTag && (
+                                  <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-amber-400 font-mono text-[10px] font-bold shrink-0">
+                                    {user.teamTag}
+                                  </span>
+                                )}
+                                <span className="text-white font-medium truncate text-xs" title={user.teamName}>
+                                  {user.teamName}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-slate-500 text-[11px] italic">Sem equipe</span>
                             )}
-                            <span className="text-white font-medium truncate" title={user.teamName}>
-                              {user.teamName}
+                          </div>
+                          <div>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border inline-flex items-center gap-1 ${tier.badgeBg} ${tier.badgeBorder} ${tier.textColor}`}>
+                              <span>{tier.badgeIcon}</span>
+                              <span className="font-mono">{user.stats?.simRating || 3000}</span>
                             </span>
                           </div>
-                        ) : (
-                          <span className="text-slate-500 text-[11px] italic">Sem equipe</span>
-                        )}
-                      </td>
-
-                      {/* Gaming Platform & ID */}
-                      <td className="py-3.5 px-3">
-                        <div className="space-y-0.5">
-                          <div className="text-[11px] text-slate-300 font-medium truncate">
-                            {user.gamingPlatform || 'Steam (PC)'}
-                          </div>
-                          {(user.gamingId || user.steamId) && (
-                            <div className="text-[10px] text-slate-400 font-mono truncate" title={user.gamingId || user.steamId}>
-                              ID: {user.gamingId || user.steamId}
-                            </div>
-                          )}
                         </div>
                       </td>
 
-                      {/* Sim Rating */}
-                      <td className="py-3.5 px-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold border inline-flex items-center gap-1 ${tier.badgeBg} ${tier.badgeBorder} ${tier.textColor}`}>
-                            <span>{tier.badgeIcon}</span>
-                            <span className="font-mono">{user.stats?.simRating || 3000}</span>
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Ligas inscritas */}
-                      <td className="py-3.5 px-3 text-center">
-                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 font-mono text-[11px] font-bold">
+                      {/* Ligas Inscritas */}
+                      <td className="py-3 px-2 text-center">
+                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 font-mono text-[11px] font-bold" title={`${champCount} campeonatos inscritos`}>
                           {champCount}
                         </span>
                       </td>
 
-                      {/* Papel */}
-                      <td className="py-3.5 px-3">
-                        {isThyago ? (
-                          <span className="px-2.5 py-1 rounded-md bg-amber-500/20 border border-amber-500/50 text-amber-300 font-bold text-[10px] uppercase tracking-wider inline-flex items-center gap-1">
-                            <Crown className="w-3 h-3 text-amber-400" />
-                            Admin Master
-                          </span>
-                        ) : user.role === 'admin' ? (
-                          <span className="px-2 py-0.5 rounded-md bg-red-950/80 border border-red-800/80 text-red-300 font-semibold text-[10px] uppercase">
-                            Admin de Liga
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-md bg-blue-950/60 border border-blue-800/60 text-blue-300 font-semibold text-[10px] uppercase">
-                            Piloto
-                          </span>
-                        )}
-                      </td>
+                      {/* Actions: Edit, View, Delete */}
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {/* Edit pilot button */}
+                          <button
+                            onClick={() => handleOpenEdit(user)}
+                            className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:text-amber-200 transition-colors cursor-pointer"
+                            title="Editar Perfil do Piloto (Nome, ID, Equipe, Stats)"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
 
-                      {/* Actions */}
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
                           {/* View details */}
                           <button
                             onClick={() => setDetailUser(user)}
@@ -627,11 +796,10 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
                           {isThyago ? (
                             <button
                               disabled
-                              className="px-2.5 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-500 text-[11px] font-semibold cursor-not-allowed flex items-center gap-1 opacity-60"
-                              title="A conta do Admin Master é protegida contra exclusão."
+                              className="p-1.5 rounded-lg bg-slate-800/40 border border-slate-700/40 text-slate-600 cursor-not-allowed"
+                              title="Conta do Master Root protegida contra exclusão."
                             >
-                              <Lock className="w-3 h-3" />
-                              <span className="hidden sm:inline">Protegida</span>
+                              <Lock className="w-3.5 h-3.5" />
                             </button>
                           ) : (
                             <button
@@ -639,11 +807,10 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
                                 setUserToDelete(user);
                                 setConfirmationInput('');
                               }}
-                              className="px-2.5 py-1.5 rounded-lg bg-red-950/80 hover:bg-red-900 border border-red-800/80 text-red-300 hover:text-red-100 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
-                              title="Excluir totalmente esta conta de todos os bancos de dados"
+                              className="p-1.5 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-800/70 text-red-300 hover:text-red-100 transition-all cursor-pointer shadow-sm"
+                              title="Excluir totalmente esta conta"
                             >
-                              <Trash2 className="w-3 h-3 text-red-400" />
-                              <span>Excluir</span>
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           )}
                         </div>
@@ -655,7 +822,447 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
             </tbody>
           </table>
         </div>
+
+        {/* Mobile View: Compact Responsive Cards (ZERO lateral scroll) */}
+        <div className="md:hidden divide-y divide-slate-800/70">
+          {filteredUsers.length === 0 ? (
+            <div className="py-10 text-center text-slate-500 p-4">
+              <Users className="w-8 h-8 mx-auto mb-2 opacity-40" />
+              Nenhuma conta encontrada com os critérios informados.
+            </div>
+          ) : (
+            filteredUsers.map((user) => {
+              const isThyago = user.email.toLowerCase().trim() === 'thyago.talm@gmail.com';
+              const tier = getSimRatingTier(user.stats?.simRating);
+              const champCount = getUserChampionshipCount(user.id, user.email);
+
+              return (
+                <div
+                  key={user.id}
+                  className={`p-4 space-y-3 transition-colors ${
+                    isThyago ? 'bg-amber-500/[0.04] border-l-4 border-l-amber-500' : ''
+                  }`}
+                >
+                  {/* Pilot Header */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="relative shrink-0">
+                        <img
+                          src={user.avatar}
+                          alt={user.name}
+                          referrerPolicy="no-referrer"
+                          className={`w-10 h-10 rounded-full object-cover border-2 ${
+                            isThyago ? 'border-amber-500' : 'border-slate-700'
+                          }`}
+                        />
+                        {isThyago && (
+                          <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center text-[9px] text-slate-950 font-bold">
+                            👑
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-white text-sm flex items-center gap-1.5 truncate">
+                          <span className="truncate">{user.name}</span>
+                          {user.country && <CountryFlag country={user.country} size="xs" />}
+                        </div>
+                        <div className="flex items-center gap-1 text-[10px] text-slate-400 font-mono truncate">
+                          <span className="truncate">ID: {user.id}</span>
+                          <button
+                            onClick={() => handleCopy(user.id, `id_${user.id}`)}
+                            className="hover:text-amber-400 p-0.5 cursor-pointer shrink-0"
+                          >
+                            {copiedId === `id_${user.id}` ? (
+                              <Check className="w-2.5 h-2.5 text-emerald-400" />
+                            ) : (
+                              <Copy className="w-2.5 h-2.5 text-slate-500" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Role & Rating */}
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      {isThyago ? (
+                        <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold text-[9px] uppercase border border-amber-500/40">
+                          Master
+                        </span>
+                      ) : user.role === 'admin' ? (
+                        <span className="px-2 py-0.5 rounded bg-red-950/80 text-red-300 font-semibold text-[9px] uppercase border border-red-800/60">
+                          Admin
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded bg-blue-950/60 text-blue-300 font-semibold text-[9px] uppercase border border-blue-800/60">
+                          Piloto
+                        </span>
+                      )}
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border inline-flex items-center gap-1 ${tier.badgeBg} ${tier.badgeBorder} ${tier.textColor}`}>
+                        <span>{tier.badgeIcon}</span>
+                        <span className="font-mono">{user.stats?.simRating || 3000}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Info Grid */}
+                  <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
+                    <div className="truncate">
+                      <span className="text-slate-500 block text-[9px] uppercase">E-mail</span>
+                      <span className="text-slate-300 font-mono truncate block" title={user.email}>{user.email}</span>
+                    </div>
+                    <div className="truncate">
+                      <span className="text-slate-500 block text-[9px] uppercase">Equipe</span>
+                      <span className="text-white truncate block">
+                        {user.teamName ? (
+                          <>
+                            {user.teamTag && <strong className="text-amber-400 mr-1">[{user.teamTag}]</strong>}
+                            {user.teamName}
+                          </>
+                        ) : (
+                          <span className="text-slate-500 italic">Sem equipe</span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="truncate">
+                      <span className="text-slate-500 block text-[9px] uppercase">Plataforma</span>
+                      <span className="text-slate-300 truncate block">{user.gamingPlatform || 'Steam (PC)'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 block text-[9px] uppercase">Ligas</span>
+                      <span className="text-amber-400 font-mono font-bold block">{champCount} campeonato(s)</span>
+                    </div>
+                  </div>
+
+                  {/* Actions Row */}
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      onClick={() => handleOpenEdit(user)}
+                      className="flex-1 py-1.5 px-3 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>Editar Perfil</span>
+                    </button>
+
+                    <button
+                      onClick={() => setDetailUser(user)}
+                      className="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      <span>Detalhes</span>
+                    </button>
+
+                    {!isThyago && (
+                      <button
+                        onClick={() => {
+                          setUserToDelete(user);
+                          setConfirmationInput('');
+                        }}
+                        className="py-1.5 px-3 rounded-lg bg-red-950/70 hover:bg-red-900 border border-red-800/80 text-red-300 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                        <span>Excluir</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
+
+      {/* Edit Pilot Profile Modal (Master Admin Only) */}
+      {userToEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-2xl bg-[#0d131f] border border-amber-500/50 rounded-3xl shadow-2xl p-6 sm:p-7 space-y-5 max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between gap-3 border-b border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <img
+                  src={userToEdit.avatar}
+                  alt={userToEdit.name}
+                  referrerPolicy="no-referrer"
+                  className="w-12 h-12 rounded-full object-cover border-2 border-amber-500/70"
+                />
+                <div>
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold text-[10px] uppercase tracking-wider border border-amber-500/40 mb-1">
+                    <Pencil className="w-3 h-3 text-amber-400" />
+                    <span>Edição de Perfil de Piloto</span>
+                  </div>
+                  <h3 className="text-lg font-bold text-white font-display flex items-center gap-2">
+                    <span>{userToEdit.name}</span>
+                    {userToEdit.country && <CountryFlag country={userToEdit.country} size="xs" />}
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setUserToEdit(null);
+                  setEditError(null);
+                }}
+                disabled={isSavingEdit}
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Error Message */}
+            {editError && (
+              <div className="p-3 rounded-xl bg-red-950/70 border border-red-800 text-red-200 text-xs flex items-center gap-2 animate-in fade-in">
+                <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+                <span>{editError}</span>
+              </div>
+            )}
+
+            {/* Edit Form */}
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                {/* Nome e Sobrenome */}
+                <div className="space-y-1">
+                  <label className="block text-slate-300 font-semibold text-[11px]">
+                    Nome e Sobrenome <span className="text-amber-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Ex: Ayrton Senna"
+                    disabled={isSavingEdit}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* ID do Piloto */}
+                <div className="space-y-1">
+                  <label className="block text-slate-300 font-semibold text-[11px] flex items-center justify-between">
+                    <span>ID do Usuário <span className="text-amber-400">*</span></span>
+                    {userToEdit.email.toLowerCase().trim() === 'thyago.talm@gmail.com' && (
+                      <span className="text-[10px] text-amber-400/80 font-normal">Protegido (Master)</span>
+                    )}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editId}
+                    onChange={(e) => setEditId(e.target.value)}
+                    disabled={isSavingEdit || userToEdit.email.toLowerCase().trim() === 'thyago.talm@gmail.com'}
+                    placeholder="Ex: user_1791..."
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 disabled:opacity-60 disabled:cursor-not-allowed rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors"
+                  />
+                  <span className="text-[10px] text-slate-500 block leading-tight">
+                    Alterar este ID atualiza automaticamente todas as inscrições deste piloto.
+                  </span>
+                </div>
+
+                {/* E-mail (Bloqueado) */}
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="block text-slate-400 font-semibold text-[11px] flex items-center gap-1.5">
+                    <Lock className="w-3 h-3 text-amber-400" />
+                    <span>E-mail de Cadastro (Bloqueado para Edição)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      disabled
+                      value={userToEdit.email}
+                      className="w-full bg-slate-900/60 border border-slate-800 text-slate-400 font-mono text-xs rounded-xl px-3.5 py-2.5 cursor-not-allowed select-all"
+                    />
+                  </div>
+                  <span className="text-[10px] text-slate-500 block">
+                    O e-mail e senha de acesso são protegidos para preservar as credenciais originais de login do piloto.
+                  </span>
+                </div>
+
+                {/* Equipe do Piloto */}
+                <div className="space-y-1">
+                  <label className="block text-slate-300 font-semibold text-[11px]">
+                    Equipe do Piloto (Perfil Pessoal)
+                  </label>
+                  <input
+                    type="text"
+                    value={editTeamName}
+                    onChange={(e) => setEditTeamName(e.target.value)}
+                    placeholder="Ex: RDX Racing, Apex SimTeam"
+                    disabled={isSavingEdit}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* Sigla da Equipe */}
+                <div className="space-y-1">
+                  <label className="block text-slate-300 font-semibold text-[11px]">
+                    Sigla da Equipe (TAG)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={6}
+                    value={editTeamTag}
+                    onChange={(e) => setEditTeamTag(e.target.value.toUpperCase())}
+                    placeholder="Ex: RDX, APX, F1"
+                    disabled={isSavingEdit}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white uppercase font-mono focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* Plataforma de Jogo */}
+                <div className="space-y-1">
+                  <label className="block text-slate-300 font-semibold text-[11px]">
+                    Plataforma Principal
+                  </label>
+                  <select
+                    value={editGamingPlatform}
+                    onChange={(e) => setEditGamingPlatform(e.target.value)}
+                    disabled={isSavingEdit}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors cursor-pointer"
+                  >
+                    <option value="Steam (PC)">Steam (PC)</option>
+                    <option value="PlayStation (PS5/PS4)">PlayStation (PS5/PS4)</option>
+                    <option value="Xbox Series / One">Xbox Series / One</option>
+                  </select>
+                </div>
+
+                {/* Gaming ID / Steam ID */}
+                <div className="space-y-1">
+                  <label className="block text-slate-300 font-semibold text-[11px]">
+                    ID da Plataforma / Steam GUID
+                  </label>
+                  <input
+                    type="text"
+                    value={editGamingId}
+                    onChange={(e) => setEditGamingId(e.target.value)}
+                    placeholder="Ex: 76561198000123456 ou PSN ID"
+                    disabled={isSavingEdit}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* País */}
+                <div className="space-y-1">
+                  <label className="block text-slate-300 font-semibold text-[11px]">
+                    País / Nacionalidade
+                  </label>
+                  <select
+                    value={editCountry}
+                    onChange={(e) => setEditCountry(e.target.value)}
+                    disabled={isSavingEdit}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors cursor-pointer"
+                  >
+                    <option value="Brasil 🇧🇷">Brasil 🇧🇷</option>
+                    <option value="Portugal 🇵🇹">Portugal 🇵🇹</option>
+                    <option value="Argentina 🇦🇷">Argentina 🇦🇷</option>
+                    <option value="Espanha 🇪🇸">Espanha 🇪🇸</option>
+                    <option value="Estados Unidos 🇺🇸">Estados Unidos 🇺🇸</option>
+                    <option value="Reino Unido 🇬🇧">Reino Unido 🇬🇧</option>
+                    <option value="Itália 🇮🇹">Itália 🇮🇹</option>
+                    <option value="Alemanha 🇩🇪">Alemanha 🇩🇪</option>
+                    <option value="França 🇫🇷">França 🇫🇷</option>
+                    <option value="Internacional 🌐">Internacional 🌐</option>
+                  </select>
+                </div>
+
+                {/* Discord Tag */}
+                <div className="space-y-1">
+                  <label className="block text-slate-300 font-semibold text-[11px]">
+                    Discord Tag
+                  </label>
+                  <input
+                    type="text"
+                    value={editDiscordTag}
+                    onChange={(e) => setEditDiscordTag(e.target.value)}
+                    placeholder="Ex: piloto#1234 ou piloto.sim"
+                    disabled={isSavingEdit}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* Número do Carro */}
+                <div className="space-y-1">
+                  <label className="block text-slate-300 font-semibold text-[11px]">
+                    Número de Corrida (#)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={editRacingNumber}
+                    onChange={(e) => setEditRacingNumber(parseInt(e.target.value) || 1)}
+                    disabled={isSavingEdit}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* Sim Rating */}
+                <div className="space-y-1">
+                  <label className="block text-slate-300 font-semibold text-[11px]">
+                    Sim Rating (Pontuação Geral)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={10000}
+                    value={editSimRating}
+                    onChange={(e) => setEditSimRating(parseInt(e.target.value) || 3000)}
+                    disabled={isSavingEdit}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* Papel do Usuário */}
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="block text-slate-300 font-semibold text-[11px]">
+                    Papel na Plataforma
+                  </label>
+                  <select
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value as any)}
+                    disabled={isSavingEdit || userToEdit.email.toLowerCase().trim() === 'thyago.talm@gmail.com'}
+                    className="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <option value="pilot">Piloto (Acesso comum, inscrições e perfil)</option>
+                    <option value="admin">Administrador de Liga (Gerencia campeonatos atribuídos)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserToEdit(null);
+                    setEditError(null);
+                  }}
+                  disabled={isSavingEdit}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSavingEdit}
+                  className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition-all cursor-pointer shadow-lg shadow-amber-500/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSavingEdit ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Salvando Alterações...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Salvar Alterações</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Account Inspector Modal */}
       {detailUser && (

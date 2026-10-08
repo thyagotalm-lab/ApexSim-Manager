@@ -266,25 +266,27 @@ export const syncBackendWithFirestore = async (): Promise<User[]> => {
     }
   });
 
-  // 2. Get Firestore users
-  try {
-    const colRef = collection(db, USERS_COLLECTION);
-    const snap = await getDocs(colRef);
-    snap.forEach((docSnap) => {
-      const u = docSnap.data() as User;
-      if (u && u.email && !isFakeMockUser(u)) {
-        const emailKey = u.email.toLowerCase().trim();
-        const existing = mergedMap.get(emailKey);
-        mergedMap.set(emailKey, {
-          ...existing,
-          ...u,
-          id: docSnap.id || u.id,
-        });
-      }
-    });
-  } catch (err) {
-    handleFirestoreError(err);
-    console.warn('Error reading Firestore docs during sync:', err);
+  // 2. Get Firestore users (only if quota is not exceeded to prevent backoff hanging)
+  if (!isFirestoreQuotaExceeded()) {
+    try {
+      const colRef = collection(db, USERS_COLLECTION);
+      const snap = await getDocs(colRef);
+      snap.forEach((docSnap) => {
+        const u = docSnap.data() as User;
+        if (u && u.email && !isFakeMockUser(u)) {
+          const emailKey = u.email.toLowerCase().trim();
+          const existing = mergedMap.get(emailKey);
+          mergedMap.set(emailKey, {
+            ...existing,
+            ...u,
+            id: docSnap.id || u.id,
+          });
+        }
+      });
+    } catch (err) {
+      handleFirestoreError(err);
+      console.warn('Error reading Firestore docs during sync:', err);
+    }
   }
 
   // 3. Scan championships to ensure all registered pilots have accounts
@@ -349,15 +351,81 @@ export const syncBackendWithFirestore = async (): Promise<User[]> => {
   return allMergedUsers;
 };
 
+// Master Admin: Update pilot profile data (Name, ID, Team, Stats, etc.) excluding email & password
+export const adminUpdatePilotProfileService = async (
+  oldId: string,
+  updatedData: Partial<User>
+): Promise<{ success: boolean; user?: User; error?: string }> => {
+  try {
+    // 1. Send update to backend server
+    const res = await fetch(`/api/users/${encodeURIComponent(oldId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatedData),
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Falha ao atualizar dados do piloto no servidor.');
+    }
+
+    const savedUser: User = data.user;
+
+    // 2. Sync to Firestore if quota allows
+    if (!isFirestoreQuotaExceeded()) {
+      try {
+        const newId = savedUser.id;
+        if (newId !== oldId) {
+          // If ID changed, create document with new ID and delete old document
+          await setDoc(doc(db, USERS_COLLECTION, newId), {
+            ...savedUser,
+            updatedAt: serverTimestamp(),
+          });
+          await deleteDoc(doc(db, USERS_COLLECTION, oldId));
+        } else {
+          await setDoc(
+            doc(db, USERS_COLLECTION, oldId),
+            {
+              ...savedUser,
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+        }
+      } catch (fErr) {
+        handleFirestoreError(fErr);
+        console.warn('Firestore update warning (backend saved successfully):', fErr);
+      }
+    }
+
+    return { success: true, user: savedUser };
+  } catch (err: any) {
+    console.error('adminUpdatePilotProfileService error:', err);
+    return { success: false, error: err.message || 'Erro ao atualizar piloto.' };
+  }
+};
+
 // Real-time listener for all registered users across all devices, merging Firestore + Backend
 export const subscribeToUsers = (onUsersChange: (users: User[]) => void) => {
-  try {
-    // Initial sync between Backend and Firestore
-    syncBackendWithFirestore().then((initialMerged) => {
-      if (initialMerged.length > 0) {
-        onUsersChange(initialMerged.map(sanitizeUserProfileTeams));
+  let pollingInterval: any = null;
+
+  const triggerUnifiedSync = async () => {
+    try {
+      const merged = await syncBackendWithFirestore();
+      if (merged && merged.length > 0) {
+        onUsersChange(merged.map(sanitizeUserProfileTeams));
       }
-    });
+    } catch (e) {
+      console.warn('Unified sync fallback error:', e);
+    }
+  };
+
+  try {
+    // Initial sync between Backend and Firestore immediately
+    triggerUnifiedSync();
+
+    // Set up continuous fallback poll every 8 seconds so no user is ever missing
+    pollingInterval = setInterval(triggerUnifiedSync, 8000);
 
     const colRef = collection(db, USERS_COLLECTION);
     const unsubscribe = onSnapshot(
@@ -414,13 +482,19 @@ export const subscribeToUsers = (onUsersChange: (users: User[]) => void) => {
       },
       (error) => {
         handleFirestoreError(error);
-        console.warn('Firestore onSnapshot listener error:', error);
+        console.warn('Firestore onSnapshot listener error; continuing with backend polling:', error);
       }
     );
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      if (pollingInterval) clearInterval(pollingInterval);
+    };
   } catch (error) {
-    console.error('Failed to set up Firestore snapshot listener:', error);
-    return () => {};
+    console.error('Failed to set up Firestore snapshot listener, falling back to polling:', error);
+    pollingInterval = setInterval(triggerUnifiedSync, 8000);
+    return () => {
+      if (pollingInterval) clearInterval(pollingInterval);
+    };
   }
 };
