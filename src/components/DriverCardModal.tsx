@@ -213,13 +213,6 @@ export const DriverCardModal: React.FC<DriverCardModalProps> = ({
     ctx.font = '900 48px sans-serif';
     ctx.fillText('SUPER LICENÇA DE PILOTO', 60, 140);
 
-    // Car number badge (Top right)
-    ctx.fillStyle = stripeGrad;
-    ctx.font = '900 130px sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText(`#${driver.racingNumber || 1}`, width - 70, 150);
-    ctx.textAlign = 'left';
-
     // Avatar drawing
     const avatarX = 60;
     const avatarY = 180;
@@ -375,7 +368,7 @@ export const DriverCardModal: React.FC<DriverCardModalProps> = ({
       const dataUrl = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       const cleanName = driver.name.toLowerCase().replace(/\s+/g, '_');
-      link.download = `card_piloto_${cleanName}_#${driver.racingNumber || 1}.png`;
+      link.download = `card_piloto_${cleanName}.png`;
       link.href = dataUrl;
       link.click();
     } catch (err) {
@@ -411,7 +404,7 @@ export const DriverCardModal: React.FC<DriverCardModalProps> = ({
   // Copy Text Summary for Discord/WhatsApp
   const handleCopyText = () => {
     const summary = `🏎️ **FICHA OFICIAL DE PILOTO — APEX SIM RACING**
-👤 **Piloto:** ${driver.name} (#${driver.racingNumber || 1}) ${driver.country || '🇧🇷'}${driver.teamName ? `\n🛡️ **Time:** ${driver.teamName}${driver.teamTag ? ` [${driver.teamTag}]` : ''}` : ''}
+👤 **Piloto:** ${driver.name} ${driver.country || '🇧🇷'}${driver.teamName ? `\n🛡️ **Time:** ${driver.teamName}${driver.teamTag ? ` [${driver.teamTag}]` : ''}` : ''}
 🏆 **Categoria:** ${tier.badgeIcon} ${tier.name}
 ⚡ **Sim Rating:** ${stats.simRating} Elo
 🛡️ **Safety Rating:** ${stats.safetyRating}
@@ -462,7 +455,7 @@ export const DriverCardModal: React.FC<DriverCardModalProps> = ({
             >
               {users.map((u) => (
                 <option key={u.id} value={u.id}>
-                  {u.name} (#{u.racingNumber || 1}) · {u.stats?.simRating || 3000} SR
+                  {u.name} · {u.stats?.simRating || 3000} SR
                 </option>
               ))}
             </select>
@@ -528,8 +521,9 @@ export const DriverCardModal: React.FC<DriverCardModalProps> = ({
                   Super Licença de Piloto
                 </span>
               </div>
-              <div className="text-3xl sm:text-4xl font-black font-mono tracking-tighter text-white opacity-90 drop-shadow-md">
-                #{driver.racingNumber || 1}
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900/80 border border-slate-800 text-red-400">
+                <Gamepad2 className="w-5 h-5 text-red-500" />
+                <span className="text-xs font-mono font-bold tracking-wider uppercase text-slate-300">APEX</span>
               </div>
             </div>
 
@@ -542,9 +536,6 @@ export const DriverCardModal: React.FC<DriverCardModalProps> = ({
                   referrerPolicy="no-referrer"
                   className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-slate-700 shadow-xl"
                 />
-                <span className="absolute -bottom-2 -right-2 bg-slate-950 text-red-400 font-mono text-[10px] font-bold px-1.5 py-0.5 rounded border border-slate-700 shadow">
-                  #{driver.racingNumber || 1}
-                </span>
               </div>
 
               <div className="min-w-0 text-center sm:text-left flex-1">

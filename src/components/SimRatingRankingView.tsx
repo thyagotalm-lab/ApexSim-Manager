@@ -490,11 +490,6 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
                               <span className="font-bold text-white truncate max-w-[160px] sm:max-w-[220px]">
                                 {driver.name}
                               </span>
-                              {driver.racingNumber && (
-                                <span className="bg-slate-950 text-white font-mono font-bold text-[10px] px-1 rounded border border-slate-700">
-                                  #{driver.racingNumber}
-                                </span>
-                              )}
                               {isCurrent && (
                                 <span className="text-[9px] bg-red-600 text-white font-bold px-1.5 py-0.2 rounded">
                                   Você
