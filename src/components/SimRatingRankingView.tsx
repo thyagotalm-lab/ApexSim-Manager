@@ -24,6 +24,7 @@ import {
   getSimRatingTier,
 } from '../utils/simRating';
 import { CountryFlag } from './CountryFlag';
+import { sanitizeUserProfileTeams } from '../services/userService';
 
 interface SimRatingRankingViewProps {
   onNavigateToProfile?: () => void;
@@ -44,10 +45,11 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
   const [sortBy, setSortBy] = useState<'simRating' | 'wins' | 'podiums' | 'races' | 'points'>('simRating');
   const [sortDirection, setSortDirection] = useState<'desc' | 'asc'>('desc');
 
-  // Consolidate pilots list: All registered users with safe stats
+  // Consolidate pilots list: All registered users with safe stats and authentic profile teams
   const allDrivers: User[] = useMemo(() => {
     return users.map((u) => {
-      const stats = u.stats || {
+      const cleanUser = sanitizeUserProfileTeams(u);
+      const stats = cleanUser.stats || {
         races: 0,
         wins: 0,
         podiums: 0,
@@ -64,7 +66,7 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
         : DEFAULT_SIM_RATING;
 
       return {
-        ...u,
+        ...cleanUser,
         stats: {
           ...stats,
           simRating,

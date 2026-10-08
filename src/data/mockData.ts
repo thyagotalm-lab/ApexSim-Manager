@@ -19,8 +19,8 @@ export const THYAGO_ADMIN_USER: User = {
   country: 'Brasil 🇧🇷',
   racingNumber: 1,
   driverCategory: 'Pro',
-  teamName: 'Apex Sim Racing Team',
-  teamTag: 'APX',
+  teamName: 'RDX Racing',
+  teamTag: 'RDX',
   administeredLeagueIds: [],
   stats: {
     races: 0,

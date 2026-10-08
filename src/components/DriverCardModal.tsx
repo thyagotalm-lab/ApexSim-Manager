@@ -21,6 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
 import { getSimRatingTier } from '../utils/simRating';
 import { CountryFlag } from './CountryFlag';
+import { sanitizeUserProfileTeams } from '../services/userService';
 
 interface DriverCardModalProps {
   initialDriver?: User | null;
@@ -51,7 +52,14 @@ export const DriverCardModal: React.FC<DriverCardModalProps> = ({
   const cardRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const driver = users.find((u) => u.id === selectedDriverId) || initialDriver || currentUser || users[0];
+  const matchedDriver =
+    users.find((u) => u.id === selectedDriverId) ||
+    (initialDriver ? users.find((u) => u.id === initialDriver.id || u.name.toLowerCase().trim() === initialDriver.name.toLowerCase().trim()) : null) ||
+    initialDriver ||
+    currentUser ||
+    users[0];
+
+  const driver = matchedDriver ? sanitizeUserProfileTeams(matchedDriver) : null;
 
   if (!driver) return null;
 
@@ -268,13 +276,6 @@ export const DriverCardModal: React.FC<DriverCardModalProps> = ({
       ctx.fillStyle = '#f87171';
       ctx.font = 'bold 24px sans-serif';
       ctx.fillText(`🛡️ Time: ${driver.teamName}${driver.teamTag ? ` [${driver.teamTag}]` : ''}`, infoX, nextY);
-    }
-
-    if (activeChampionship) {
-      nextY += 34;
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '22px sans-serif';
-      ctx.fillText(`Campeonato: ${activeChampionship.name} [${activeChampionship.simulator}]`, infoX, nextY);
     }
 
     // Rating Cards Grid (Sim Rating + Safety Rating)

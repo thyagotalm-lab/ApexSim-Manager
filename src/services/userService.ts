@@ -53,6 +53,51 @@ export const isFakeMockUser = (u: any): boolean => {
   return false;
 };
 
+// Known championship cars/teams that should NOT be treated as user profile esports teams
+export const CHAMPIONSHIP_CAR_TEAMS = new Set([
+  'haas f1 team',
+  'visa cash app rb formula one team',
+  'aston martin aramco f1 team',
+  'stake f1 team kick sauber',
+  'bwt alpine f1 team',
+  'oracle red bull racing',
+  'scuderia ferrari',
+  'mclaren formula 1 team',
+  'mercedes-amg petronas f1 team',
+  'williams racing',
+  'scuderia apex racing',
+  'redline simsports',
+  'williams sim academy',
+  'apex gp',
+  'penske virtual porsche',
+  'ferrari esports br',
+  'mclaren shadow brasil',
+  'red bull virtual gp'
+]);
+
+// Ensures only real user profile teams (configured in DriverProfileView) appear on users, never championship teams
+export const sanitizeUserProfileTeams = (u: User): User => {
+  if (!u) return u;
+  const isThyago = (u.email || '').toLowerCase().trim() === 'thyago.talm@gmail.com' || u.id === 'user_thyago_talm';
+  if (isThyago) {
+    return {
+      ...u,
+      teamName: u.teamName || 'RDX Racing',
+      teamTag: u.teamTag || 'RDX',
+    };
+  }
+
+  if (u.teamName && CHAMPIONSHIP_CAR_TEAMS.has(u.teamName.toLowerCase().trim())) {
+    return {
+      ...u,
+      teamName: '',
+      teamTag: '',
+    };
+  }
+
+  return u;
+};
+
 // Permanently delete user from Firestore and Backend across all databases
 export const deleteUserCompletely = async (id: string, email?: string): Promise<{ success: boolean; message: string }> => {
   const cleanId = id.trim();
@@ -162,7 +207,7 @@ export const fetchBackendUsers = async (): Promise<User[]> => {
     if (res.ok) {
       const data = await res.json();
       if (data && Array.isArray(data.users)) {
-        return data.users.filter((u: User) => !isFakeMockUser(u));
+        return data.users.filter((u: User) => !isFakeMockUser(u)).map(sanitizeUserProfileTeams);
       }
     }
   } catch (err) {
@@ -265,8 +310,9 @@ export const syncBackendWithFirestore = async (): Promise<User[]> => {
                 country: r.country || 'Brasil 🇧🇷',
                 racingNumber: r.carNumber || 9,
                 driverCategory: 'Pro',
-                teamName: r.teamName || '',
-                teamTag: r.teamTag || '',
+                // User profile teamName and teamTag must come exclusively from profile editing, not championship teams
+                teamName: '',
+                teamTag: '',
                 administeredLeagueIds: [],
                 stats: {
                   races: 0,
@@ -295,7 +341,7 @@ export const syncBackendWithFirestore = async (): Promise<User[]> => {
     mergedMap.set('thyago.talm@gmail.com', THYAGO_ADMIN_USER);
   }
 
-  const allMergedUsers = Array.from(mergedMap.values());
+  const allMergedUsers = Array.from(mergedMap.values()).map(sanitizeUserProfileTeams);
 
   // 5. Sync merged back to backend without burning Firestore quota
   syncUsersToBackend(allMergedUsers).catch(() => {});
@@ -309,7 +355,7 @@ export const subscribeToUsers = (onUsersChange: (users: User[]) => void) => {
     // Initial sync between Backend and Firestore
     syncBackendWithFirestore().then((initialMerged) => {
       if (initialMerged.length > 0) {
-        onUsersChange(initialMerged);
+        onUsersChange(initialMerged.map(sanitizeUserProfileTeams));
       }
     });
 
@@ -363,7 +409,7 @@ export const subscribeToUsers = (onUsersChange: (users: User[]) => void) => {
           firestoreMap.set('thyago.talm@gmail.com', THYAGO_ADMIN_USER);
         }
 
-        const unifiedList = Array.from(firestoreMap.values());
+        const unifiedList = Array.from(firestoreMap.values()).map(sanitizeUserProfileTeams);
         onUsersChange(unifiedList);
       },
       (error) => {

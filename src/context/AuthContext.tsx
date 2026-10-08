@@ -8,6 +8,7 @@ import {
   isDeletedUserAccount,
   syncBackendWithFirestore,
   deleteUserCompletely,
+  sanitizeUserProfileTeams,
 } from '../services/userService';
 
 interface AuthContextType {
@@ -89,9 +90,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               (id) => !id.startsWith('champ_gt3_') && !id.startsWith('champ_f1_brasil_') && !id.startsWith('champ_porsche_')
             ),
           };
-          return parsed;
+          return parsed.map(sanitizeUserProfileTeams);
         } else {
-          return [THYAGO_ADMIN_USER, ...parsed];
+          return [THYAGO_ADMIN_USER, ...parsed].map(sanitizeUserProfileTeams);
         }
       }
     } catch (e) {
@@ -109,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return null;
         }
         const found = users.find((u) => u.id === savedId && !isFakeMockUser(u) && !isDeletedUserAccount(u));
-        if (found) return found;
+        if (found) return sanitizeUserProfileTeams(found);
       }
     } catch (e) {
       console.error(e);
@@ -156,9 +157,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return u;
         });
 
-        setUsers(sanitized);
+        const cleanUsers = sanitized.map(sanitizeUserProfileTeams);
+        setUsers(cleanUsers);
         try {
-          localStorage.setItem('apexsim_users_db', JSON.stringify(sanitized));
+          localStorage.setItem('apexsim_users_db', JSON.stringify(cleanUsers));
         } catch (_) {}
       }
     });
@@ -391,7 +393,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const merged = await syncBackendWithFirestore();
       if (merged && merged.length > 0) {
-        setUsers(merged);
+        setUsers(merged.map(sanitizeUserProfileTeams));
       }
     } catch (err) {
       console.warn('Sync error:', err);

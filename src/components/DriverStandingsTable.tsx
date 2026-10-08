@@ -514,10 +514,33 @@ export const DriverStandingsTable: React.FC<DriverStandingsTableProps> = ({
                             onClick={() => {
                               const pilotUser = users.find(
                                 (u) =>
-                                  u.id === driver.driverId ||
+                                  (driver.driverId && u.id === driver.driverId) ||
                                   u.name.toLowerCase().trim() === driver.driverName.toLowerCase().trim()
                               );
-                              onOpenCardModal(pilotUser);
+                              onOpenCardModal(
+                                pilotUser || {
+                                  id: driver.driverId || `pilot_${driver.driverName}`,
+                                  name: driver.driverName,
+                                  email: '',
+                                  avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250',
+                                  role: 'pilot',
+                                  country: 'Brasil 🇧🇷',
+                                  teamName: '',
+                                  teamTag: '',
+                                  administeredLeagueIds: [],
+                                  stats: {
+                                    races: completedStages.length,
+                                    wins: driver.wins || 0,
+                                    podiums: driver.podiums || 0,
+                                    poles: 0,
+                                    fastestLaps: 0,
+                                    points: driver.totalPoints || 0,
+                                    dnfs: 0,
+                                    safetyRating: 'B 3.50',
+                                    simRating: 3000,
+                                  },
+                                }
+                              );
                             }}
                             className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors cursor-pointer"
                             title={`Gerar Card Oficial de ${driver.driverName}`}

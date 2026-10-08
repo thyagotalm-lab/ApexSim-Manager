@@ -19,6 +19,7 @@ import { User } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
 import { getSimRatingTier } from '../utils/simRating';
+import { sanitizeUserProfileTeams } from '../services/userService';
 
 interface HeadToHeadModalProps {
   initialDriverA?: User | null;
@@ -50,8 +51,11 @@ export const HeadToHeadModal: React.FC<HeadToHeadModalProps> = ({
 
   const [copiedSummary, setCopiedSummary] = useState(false);
 
-  const driverA = users.find((u) => u.id === driverAId) || users[0];
-  const driverB = users.find((u) => u.id === driverBId) || users[1] || users[0];
+  const rawDriverA = users.find((u) => u.id === driverAId) || users[0];
+  const rawDriverB = users.find((u) => u.id === driverBId) || users[1] || users[0];
+
+  const driverA = sanitizeUserProfileTeams(rawDriverA);
+  const driverB = sanitizeUserProfileTeams(rawDriverB);
 
   const handleSwapDrivers = () => {
     const temp = driverAId;
@@ -311,9 +315,6 @@ export const HeadToHeadModal: React.FC<HeadToHeadModalProps> = ({
                     referrerPolicy="no-referrer"
                     className="w-14 h-14 rounded-xl object-cover border-2 border-red-500 shadow-md"
                   />
-                  <span className="absolute -bottom-1 -right-1 bg-red-600 text-white font-mono text-[10px] font-black px-1.5 py-0.2 rounded shadow">
-                    #{driverA.racingNumber || 1}
-                  </span>
                 </div>
                 <div className="min-w-0 flex-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-red-400">Piloto A</span>
@@ -324,14 +325,23 @@ export const HeadToHeadModal: React.FC<HeadToHeadModalProps> = ({
                   >
                     {users.map((u) => (
                       <option key={`a-${u.id}`} value={u.id} disabled={u.id === driverBId}>
-                        {u.name} (#{u.racingNumber || 1})
+                        {u.name}
                       </option>
                     ))}
                   </select>
-                  <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
+                  <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
                     <span className="font-mono text-amber-400 font-bold">{statsA.simRating} Elo</span>
                     <span>·</span>
                     <span>{driverA.country || 'Brasil 🇧🇷'}</span>
+                    {driverA.teamName && (
+                      <>
+                        <span>·</span>
+                        <span className="text-slate-200 font-semibold truncate max-w-[120px] flex items-center gap-1">
+                          <Shield className="w-3 h-3 text-red-400 shrink-0" />
+                          <span>{driverA.teamName}</span>
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -360,9 +370,6 @@ export const HeadToHeadModal: React.FC<HeadToHeadModalProps> = ({
                     referrerPolicy="no-referrer"
                     className="w-14 h-14 rounded-xl object-cover border-2 border-blue-500 shadow-md"
                   />
-                  <span className="absolute -bottom-1 -right-1 bg-blue-600 text-white font-mono text-[10px] font-black px-1.5 py-0.2 rounded shadow">
-                    #{driverB.racingNumber || 2}
-                  </span>
                 </div>
                 <div className="min-w-0 flex-1">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Piloto B</span>
@@ -373,14 +380,23 @@ export const HeadToHeadModal: React.FC<HeadToHeadModalProps> = ({
                   >
                     {users.map((u) => (
                       <option key={`b-${u.id}`} value={u.id} disabled={u.id === driverAId}>
-                        {u.name} (#{u.racingNumber || 1})
+                        {u.name}
                       </option>
                     ))}
                   </select>
-                  <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-2">
+                  <div className="text-[11px] text-slate-400 mt-1 flex items-center gap-1.5 flex-wrap">
                     <span className="font-mono text-amber-400 font-bold">{statsB.simRating} Elo</span>
                     <span>·</span>
                     <span>{driverB.country || 'Brasil 🇧🇷'}</span>
+                    {driverB.teamName && (
+                      <>
+                        <span>·</span>
+                        <span className="text-slate-200 font-semibold truncate max-w-[120px] flex items-center gap-1">
+                          <Shield className="w-3 h-3 text-blue-400 shrink-0" />
+                          <span>{driverB.teamName}</span>
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>

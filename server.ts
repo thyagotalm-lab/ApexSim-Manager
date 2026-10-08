@@ -156,8 +156,8 @@ const THYAGO_ADMIN_USER = {
   country: 'Brasil 🇧🇷',
   racingNumber: 1,
   driverCategory: 'Pro',
-  teamName: 'Apex Sim Racing Team',
-  teamTag: 'APX',
+  teamName: 'RDX Racing',
+  teamTag: 'RDX',
   administeredLeagueIds: [],
   stats: {
     races: 0,
@@ -258,8 +258,9 @@ const readUsersFromFile = (): any[] => {
             country: reg.country || 'Brasil 🇧🇷',
             racingNumber: reg.carNumber || Math.floor(Math.random() * 98) + 1,
             driverCategory: 'Pro',
-            teamName: reg.teamName || '',
-            teamTag: reg.teamTag || '',
+            // User profile teamName and teamTag must come exclusively from profile editing, not championship teams
+            teamName: '',
+            teamTag: '',
             administeredLeagueIds: [],
             stats: {
               races: 0,
