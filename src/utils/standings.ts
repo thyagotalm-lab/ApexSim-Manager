@@ -1,4 +1,4 @@
-import { Championship, ConstructorStanding, DriverStanding, RaceResultItem } from '../types';
+import { Championship, ConstructorStanding, DriverStanding, RaceResultItem, User } from '../types';
 
 export const isReserveDriverOrTeam = (nameOrTeam?: string): boolean => {
   if (!nameOrTeam) return false;
@@ -6,7 +6,32 @@ export const isReserveDriverOrTeam = (nameOrTeam?: string): boolean => {
   return s === 'reserva' || s === 'piloto reserva' || s === 'pilotos reservas' || s.startsWith('reserva ');
 };
 
-export function calculateDriverStandings(championship: Championship): DriverStanding[] {
+// Helper to resolve the canonical, up-to-date driver name from registered users
+const resolveCanonicalDriverName = (
+  driverId: string | undefined,
+  fallbackName: string,
+  userEmail?: string,
+  users?: User[]
+): string => {
+  if (!users || users.length === 0) return fallbackName;
+  const cleanId = (driverId || '').trim();
+  const cleanEmail = (userEmail || '').toLowerCase().trim();
+  const cleanName = (fallbackName || '').toLowerCase().trim();
+
+  const user = users.find((u) => {
+    if (cleanId && u.id === cleanId) return true;
+    if (cleanEmail && u.email?.toLowerCase().trim() === cleanEmail) return true;
+    if (cleanName && u.name.toLowerCase().trim() === cleanName) return true;
+    return false;
+  });
+
+  return user?.name || fallbackName;
+};
+
+export function calculateDriverStandings(
+  championship: Championship,
+  users?: User[]
+): DriverStanding[] {
   const completedStages = championship.stages.filter(
     (stage) => stage.status === 'Concluída' && stage.results && stage.results.length > 0
   );
@@ -33,9 +58,10 @@ export function calculateDriverStandings(championship: Championship): DriverStan
     .filter((r) => r.status === 'APROVADO' || r.status === 'RESERVA' || r.isReserve)
     .forEach((reg) => {
       const isReserve = reg.status === 'RESERVA' || Boolean(reg.isReserve) || isReserveDriverOrTeam(reg.teamName);
+      const canonicalName = resolveCanonicalDriverName(reg.userId, reg.userName, reg.userEmail, users);
       driversMap.set(reg.userId, {
         driverId: reg.userId,
-        driverName: reg.userName,
+        driverName: canonicalName,
         teamName: isReserve ? 'Reserva' : reg.teamName,
         carModel: reg.carModel,
         number: reg.carNumber,
@@ -62,11 +88,18 @@ export function calculateDriverStandings(championship: Championship): DriverStan
         isReserveDriverOrTeam(result.teamName) ||
         isReserveDriverOrTeam(reg?.teamName);
 
+      const canonicalName = resolveCanonicalDriverName(
+        result.driverId,
+        reg?.userName || result.driverName,
+        reg?.userEmail,
+        users
+      );
+
       let driver = driversMap.get(result.driverId);
       if (!driver) {
         driver = {
           driverId: result.driverId,
-          driverName: result.driverName,
+          driverName: canonicalName,
           teamName: isReserve ? 'Reserva' : result.teamName,
           carModel: result.carModel,
           number: result.number,
@@ -82,6 +115,7 @@ export function calculateDriverStandings(championship: Championship): DriverStan
         };
         driversMap.set(result.driverId, driver);
       } else {
+        driver.driverName = canonicalName;
         if (isReserve) {
           driver.isReserve = true;
           driver.teamName = 'Reserva';
@@ -137,7 +171,10 @@ export function calculateDriverStandings(championship: Championship): DriverStan
   }));
 }
 
-export function calculateConstructorStandings(championship: Championship): ConstructorStanding[] {
+export function calculateConstructorStandings(
+  championship: Championship,
+  users?: User[]
+): ConstructorStanding[] {
   const completedStages = championship.stages.filter(
     (stage) => stage.status === 'Concluída' && stage.results && stage.results.length > 0
   );
@@ -169,7 +206,8 @@ export function calculateConstructorStandings(championship: Championship): Const
         };
         teamMap.set(reg.teamName, team);
       }
-      team.drivers.add(reg.userName);
+      const canonicalName = resolveCanonicalDriverName(reg.userId, reg.userName, reg.userEmail, users);
+      team.drivers.add(canonicalName);
     });
 
   // Aggregate points from completed stages
@@ -203,7 +241,13 @@ export function calculateConstructorStandings(championship: Championship): Const
         teamMap.set(result.teamName, team);
       }
 
-      team.drivers.add(result.driverName);
+      const canonicalName = resolveCanonicalDriverName(
+        result.driverId,
+        reg?.userName || result.driverName,
+        reg?.userEmail,
+        users
+      );
+      team.drivers.add(canonicalName);
       const points = result.pointsAwarded || 0;
       team.roundPoints[stage.roundNumber] = (team.roundPoints[stage.roundNumber] || 0) + points;
       team.totalPoints += points;

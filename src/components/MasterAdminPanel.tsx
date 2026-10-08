@@ -23,6 +23,8 @@ import {
   Car,
   ExternalLink,
   Pencil,
+  Table,
+  LayoutGrid,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
@@ -37,13 +39,17 @@ interface MasterAdminPanelProps {
 
 export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateToTab }) => {
   const { currentUser, users, syncUsers, deleteUserAccountPermanently, adminUpdatePilotProfile } = useAuth();
-  const { championships } = useChampionships();
+  const { championships, propagatePilotProfileUpdate, reloadChampionships } = useChampionships();
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'PILOT' | 'ADMIN'>('ALL');
   const [platformFilter, setPlatformFilter] = useState<string>('ALL');
   const [sortBy, setSortBy] = useState<'NAME' | 'SIM_RATING' | 'RECENT'>('RECENT');
+  const [viewMode, setViewMode] = useState<'TABLE' | 'CARDS'>('TABLE');
+
+  // Backend Direct State to guarantee 100% of created accounts appear immediately
+  const [backendUsers, setBackendUsers] = useState<User[]>([]);
 
   // Interactive UI states
   const [isSyncing, setIsSyncing] = useState(false);
@@ -71,24 +77,56 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
+  // Direct backend fetch helper
+  const refreshBackendUsers = async () => {
+    try {
+      const res = await fetch('/api/users');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.users)) {
+          setBackendUsers(data.users);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch /api/users directly:', e);
+    }
+  };
+
   // Automatically sync on initial load to ensure all accounts created appear immediately
   useEffect(() => {
+    refreshBackendUsers();
     syncUsers();
   }, []);
 
-  // Consolidate all users from AuthContext + any pilots registered in championships
+  // Consolidate all users from Backend API + AuthContext + any pilots registered in championships
   const allConsolidatedUsers = useMemo(() => {
     const map = new Map<string, User>();
 
-    // 1. Add all users from AuthContext
-    users.forEach((u) => {
+    // 1. Add all users from Backend API (/api/users)
+    backendUsers.forEach((u) => {
       if (!isFakeMockUser(u)) {
         if (u.id) map.set(u.id, u);
         if (u.email) map.set(u.email.toLowerCase().trim(), u);
       }
     });
 
-    // 2. Add any registered pilots from championships to guarantee zero missing accounts
+    // 2. Add all users from AuthContext
+    users.forEach((u) => {
+      if (!isFakeMockUser(u)) {
+        const existing = (u.id && map.get(u.id)) || (u.email && map.get(u.email.toLowerCase().trim()));
+        if (!existing) {
+          if (u.id) map.set(u.id, u);
+          if (u.email) map.set(u.email.toLowerCase().trim(), u);
+        } else {
+          // Merge to keep most up-to-date data
+          const merged = { ...existing, ...u };
+          if (u.id) map.set(u.id, merged);
+          if (u.email) map.set(u.email.toLowerCase().trim(), merged);
+        }
+      }
+    });
+
+    // 3. Add any registered pilots from championships to guarantee zero missing accounts
     championships.forEach((c) => {
       (c.registrations || []).forEach((reg) => {
         const emailKey = (reg.userEmail || '').toLowerCase().trim();
@@ -134,7 +172,7 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
     });
 
     return Array.from(uniqueMap.values());
-  }, [users, championships]);
+  }, [backendUsers, users, championships]);
 
   // Security Check: strictly restrict to thyago.talm@gmail.com
   const isMasterAdmin = currentUser?.email?.toLowerCase().trim() === 'thyago.talm@gmail.com';
@@ -172,6 +210,7 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
   const handleSync = async () => {
     try {
       setIsSyncing(true);
+      await refreshBackendUsers();
       await syncUsers();
       setAlertFeedback({
         type: 'success',
@@ -273,6 +312,17 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
       if (!res.success) {
         throw new Error(res.error || 'Falha ao atualizar dados do piloto.');
       }
+
+      // Propagate updated name and ID across all championships, stages, results, awards & protests
+      await propagatePilotProfileUpdate(
+        userToEdit.id,
+        updatedData.id || userToEdit.id,
+        editName.trim(),
+        userToEdit.email
+      );
+
+      await refreshBackendUsers();
+      await reloadChampionships();
 
       setAlertFeedback({
         type: 'success',
@@ -377,7 +427,7 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
   const totalAdmins = allConsolidatedUsers.filter((u) => u.role === 'admin' || u.email.toLowerCase().trim() === 'thyago.talm@gmail.com').length;
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-full overflow-x-hidden space-y-6">
       {/* Feedback Toast */}
       {alertFeedback && (
         <div
@@ -587,251 +637,350 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
           </div>
         </div>
 
-        {/* Filter stats bar */}
-        <div className="flex items-center justify-between text-xs text-slate-400 pt-1 border-t border-slate-800/80">
-          <span>
-            Exibindo <strong className="text-white font-mono">{filteredUsers.length}</strong> de{' '}
-            <strong className="text-white font-mono">{allConsolidatedUsers.length}</strong> contas registradas
-          </span>
-          {(searchQuery || roleFilter !== 'ALL' || platformFilter !== 'ALL') && (
-            <button
-              onClick={() => {
-                setSearchQuery('');
-                setRoleFilter('ALL');
-                setPlatformFilter('ALL');
-              }}
-              className="text-amber-400 hover:text-amber-300 font-semibold cursor-pointer text-[11px]"
-            >
-              Limpar Filtros
-            </button>
-          )}
+        {/* Filter stats bar & View Switcher */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs text-slate-400 pt-2 border-t border-slate-800/80">
+          <div className="flex items-center gap-2">
+            <span>
+              Exibindo <strong className="text-white font-mono">{filteredUsers.length}</strong> de{' '}
+              <strong className="text-white font-mono">{allConsolidatedUsers.length}</strong> contas registradas
+            </span>
+            {(searchQuery || roleFilter !== 'ALL' || platformFilter !== 'ALL') && (
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setRoleFilter('ALL');
+                  setPlatformFilter('ALL');
+                }}
+                className="text-amber-400 hover:text-amber-300 font-semibold cursor-pointer text-[11px] ml-1"
+              >
+                Limpar Filtros
+              </button>
+            )}
+          </div>
+
+          {/* View Mode Toggle (Tabela Compacta vs Cartões Fluidos) */}
+          <div className="flex items-center gap-1.5 self-end sm:self-auto">
+            <span className="text-[11px] text-slate-400 hidden sm:inline">Visualização:</span>
+            <div className="flex items-center gap-1 bg-slate-950 border border-slate-800 p-0.5 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setViewMode('TABLE')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === 'TABLE'
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                }`}
+                title="Tabela de pilotos 100% ajustada à tela sem barra de rolagem lateral"
+              >
+                <Table className="w-3.5 h-3.5" />
+                <span>Tabela</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('CARDS')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  viewMode === 'CARDS'
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                }`}
+                title="Lista em cartões responsivos sem barra de rolagem lateral"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Cartões</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Accounts List Container (Clean Table on Desktop, Responsive Cards on Mobile - NO HORIZONTAL SCROLL) */}
-      <div className="rounded-2xl border border-slate-800 bg-[#0c121e] overflow-hidden shadow-xl">
-        {/* Desktop View: Full Width Table with fixed columns, zero horizontal overflow */}
-        <div className="hidden md:block w-full">
-          <table className="w-full text-left text-xs text-slate-300 table-fixed">
-            <colgroup>
-              <col className="w-[32%]" />
-              <col className="w-[28%]" />
-              <col className="w-[22%]" />
-              <col className="w-[6%]" />
-              <col className="w-[12%]" />
-            </colgroup>
-            <thead className="bg-slate-900/90 text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800 font-semibold">
-              <tr>
-                <th className="py-3 px-4">Piloto & Identificação</th>
-                <th className="py-3 px-3">Acesso & Plataforma</th>
-                <th className="py-3 px-3">Equipe & Rating</th>
-                <th className="py-3 px-2 text-center">Ligas</th>
-                <th className="py-3 px-4 text-right">Ações do Master</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/60 font-sans">
-              {filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="py-12 text-center text-slate-500">
-                    <Users className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                    Nenhuma conta encontrada com os critérios informados.
-                  </td>
-                </tr>
-              ) : (
-                filteredUsers.map((user) => {
-                  const isThyago = user.email.toLowerCase().trim() === 'thyago.talm@gmail.com';
-                  const tier = getSimRatingTier(user.stats?.simRating);
-                  const champCount = getUserChampionshipCount(user.id, user.email);
+      {/* Accounts Container (Zero Lateral Scrollbar on Page) */}
+      <div className="w-full max-w-full overflow-hidden">
+        {filteredUsers.length === 0 ? (
+          <div className="p-12 text-center text-slate-500 rounded-2xl border border-slate-800 bg-[#0c121e]">
+            <Users className="w-8 h-8 mx-auto mb-2 opacity-40" />
+            Nenhuma conta encontrada com os critérios informados.
+          </div>
+        ) : viewMode === 'TABLE' ? (
+          /* =========================================================================
+             OFFICIAL MASTER ADMIN TABLE (100% BOUNDED, ZERO HORIZONTAL SCROLLBAR)
+             ========================================================================= */
+          <div className="w-full max-w-full overflow-hidden rounded-2xl border border-slate-800 bg-[#0c121e] shadow-xl">
+            {/* Desktop / Tablet Table View (table-fixed strictly prevents lateral scrolling) */}
+            <div className="hidden md:block w-full max-w-full overflow-hidden">
+              <table className="w-full text-left text-xs text-slate-300 table-fixed">
+                <thead className="bg-slate-900/90 text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800 font-semibold select-none">
+                  <tr>
+                    <th className="py-3 px-3.5 w-[28%]">Piloto & ID</th>
+                    <th className="py-3 px-3 w-[26%]">E-mail & Papel</th>
+                    <th className="py-3 px-3 w-[16%]">Equipe & Carro</th>
+                    <th className="py-3 px-3 w-[11%]">Sim Rating</th>
+                    <th className="py-3 px-2.5 w-[8%] text-center">Ligas</th>
+                    <th className="py-3 px-3.5 w-[11%] text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 font-mono-numbers">
+                  {filteredUsers.map((user) => {
+                    const isThyago = user.email.toLowerCase().trim() === 'thyago.talm@gmail.com';
+                    const tier = getSimRatingTier(user.stats?.simRating);
+                    const champCount = getUserChampionshipCount(user.id, user.email);
 
-                  return (
-                    <tr
-                      key={user.id}
-                      className={`transition-colors hover:bg-slate-800/40 ${
-                        isThyago ? 'bg-amber-500/[0.03] border-l-4 border-l-amber-500' : ''
-                      }`}
-                    >
-                      {/* Name, Avatar, Role & ID */}
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="relative shrink-0">
-                            <img
-                              src={user.avatar}
-                              alt={user.name}
-                              referrerPolicy="no-referrer"
-                              className={`w-9 h-9 rounded-full object-cover border-2 shadow-sm ${
-                                isThyago ? 'border-amber-500' : 'border-slate-700'
-                              }`}
-                            />
-                            {isThyago && (
-                              <span
-                                className="absolute -bottom-1 -right-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center text-[9px] text-slate-950 font-bold shadow"
-                                title="Admin Master Root"
-                              >
-                                👑
-                              </span>
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="font-bold text-white text-xs sm:text-sm flex items-center gap-1.5 truncate">
-                              <span className="truncate">{user.name}</span>
-                              {user.country && <CountryFlag country={user.country} size="xs" />}
-                              {isThyago ? (
-                                <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold text-[9px] uppercase tracking-wider shrink-0 border border-amber-500/40">
-                                  Master
+                    return (
+                      <tr
+                        key={user.id}
+                        className={`hover:bg-slate-800/40 transition-colors ${
+                          isThyago ? 'bg-amber-950/20' : ''
+                        }`}
+                      >
+                        {/* Piloto & ID */}
+                        <td className="py-3 px-3.5">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="relative shrink-0">
+                              <img
+                                src={user.avatar}
+                                alt={user.name}
+                                referrerPolicy="no-referrer"
+                                className={`w-9 h-9 rounded-full object-cover border ${
+                                  isThyago ? 'border-amber-500 shadow-sm' : 'border-slate-700'
+                                }`}
+                              />
+                              {isThyago && (
+                                <span className="absolute -bottom-1 -right-1 w-3.5 h-3.5 bg-amber-500 rounded-full flex items-center justify-center text-[8px] text-slate-950 font-bold shadow">
+                                  👑
                                 </span>
-                              ) : user.role === 'admin' ? (
-                                <span className="px-1.5 py-0.2 rounded bg-red-950/80 text-red-300 font-semibold text-[9px] uppercase shrink-0 border border-red-800/60">
-                                  Admin
-                                </span>
-                              ) : null}
+                              )}
                             </div>
-                            <div className="text-[10px] text-slate-400 font-mono truncate flex items-center gap-1 mt-0.5">
-                              <span className="truncate" title={user.id}>ID: {user.id}</span>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-white text-xs truncate max-w-full" title={user.name}>
+                                  {user.name}
+                                </span>
+                                {user.country && <CountryFlag country={user.country} size="xs" />}
+                              </div>
+                              <div className="flex items-center gap-1 text-[10px] text-slate-400 font-mono mt-0.5">
+                                <span className="truncate max-w-[130px] select-all" title={user.id}>
+                                  {user.id}
+                                </span>
+                                <button
+                                  onClick={() => handleCopy(user.id, `id_${user.id}`)}
+                                  title="Copiar ID"
+                                  className="hover:text-amber-400 p-0.5 cursor-pointer text-slate-500 hover:text-white shrink-0"
+                                >
+                                  {copiedId === `id_${user.id}` ? (
+                                    <Check className="w-2.5 h-2.5 text-emerald-400" />
+                                  ) : (
+                                    <Copy className="w-2.5 h-2.5" />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* E-mail & Papel */}
+                        <td className="py-3 px-3">
+                          <div className="min-w-0 space-y-1">
+                            <div className="flex items-center gap-1 font-mono text-[11px] text-slate-300">
+                              <span className="truncate max-w-full" title={user.email}>
+                                {user.email}
+                              </span>
                               <button
-                                onClick={() => handleCopy(user.id, `id_${user.id}`)}
-                                title="Copiar ID Completo"
-                                className="hover:text-amber-400 p-0.5 cursor-pointer shrink-0"
+                                onClick={() => handleCopy(user.email, `email_${user.id}`)}
+                                title="Copiar E-mail"
+                                className="hover:text-amber-400 p-0.5 cursor-pointer text-slate-500 shrink-0"
                               >
-                                {copiedId === `id_${user.id}` ? (
+                                {copiedId === `email_${user.id}` ? (
                                   <Check className="w-2.5 h-2.5 text-emerald-400" />
                                 ) : (
-                                  <Copy className="w-2.5 h-2.5 text-slate-500" />
+                                  <Copy className="w-2.5 h-2.5" />
                                 )}
                               </button>
                             </div>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Email, Platform & Gaming ID */}
-                      <td className="py-3 px-3">
-                        <div className="min-w-0 space-y-0.5">
-                          <div className="flex items-center gap-1.5 text-slate-200 font-mono text-[11px] truncate">
-                            <span className="truncate" title={user.email}>
-                              {user.email}
-                            </span>
-                            <button
-                              onClick={() => handleCopy(user.email, `email_${user.id}`)}
-                              title="Copiar E-mail"
-                              className="hover:text-amber-400 p-0.5 cursor-pointer shrink-0"
-                            >
-                              {copiedId === `email_${user.id}` ? (
-                                <Check className="w-2.5 h-2.5 text-emerald-400" />
+                            <div>
+                              {isThyago ? (
+                                <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold text-[9px] uppercase tracking-wider border border-amber-500/40">
+                                  Master Root
+                                </span>
+                              ) : user.role === 'admin' ? (
+                                <span className="px-1.5 py-0.5 rounded bg-red-950/80 text-red-300 font-semibold text-[9px] uppercase border border-red-800/60">
+                                  Admin Liga
+                                </span>
                               ) : (
-                                <Copy className="w-2.5 h-2.5 text-slate-500" />
+                                <span className="px-1.5 py-0.5 rounded bg-blue-950/60 text-blue-300 font-semibold text-[9px] uppercase border border-blue-800/60">
+                                  Piloto
+                                </span>
                               )}
-                            </button>
+                            </div>
                           </div>
-                          <div className="text-[10px] text-slate-400 truncate flex items-center gap-1">
-                            <span className="text-slate-500">{user.gamingPlatform || 'Steam (PC)'}</span>
-                            {(user.gamingId || user.steamId) && (
-                              <>
-                                <span className="text-slate-600">·</span>
-                                <span className="font-mono text-slate-400 truncate" title={user.gamingId || user.steamId}>
-                                  {user.gamingId || user.steamId}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Team & Sim Rating */}
-                      <td className="py-3 px-3">
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex items-center gap-1.5 truncate">
-                            {user.teamName ? (
-                              <>
-                                {user.teamTag && (
-                                  <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-amber-400 font-mono text-[10px] font-bold shrink-0">
-                                    {user.teamTag}
-                                  </span>
-                                )}
-                                <span className="text-white font-medium truncate text-xs" title={user.teamName}>
-                                  {user.teamName}
+                        {/* Equipe & Carro */}
+                        <td className="py-3 px-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1 text-xs">
+                              {user.teamTag && (
+                                <span className="px-1 py-0.2 rounded bg-slate-800 text-amber-400 font-mono font-bold text-[9px] shrink-0">
+                                  {user.teamTag}
                                 </span>
-                              </>
+                              )}
+                              <span className="truncate font-medium text-slate-200" title={user.teamName || 'Sem equipe'}>
+                                {user.teamName || <span className="text-slate-500 italic text-[11px]">Sem equipe</span>}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              {user.racingNumber ? `Carro #${user.racingNumber}` : '—'}
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Sim Rating */}
+                        <td className="py-3 px-3">
+                          <div className={`px-2 py-0.5 rounded-lg text-[11px] font-bold border inline-flex items-center gap-1 ${tier.badgeBg} ${tier.badgeBorder} ${tier.textColor}`}>
+                            <span>{tier.badgeIcon}</span>
+                            <span className="font-mono">{user.stats?.simRating || 3000}</span>
+                          </div>
+                        </td>
+
+                        {/* Ligas */}
+                        <td className="py-3 px-2.5 text-center">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-950 border border-slate-800 text-amber-400 font-mono text-[11px] font-bold">
+                            <Car className="w-2.5 h-2.5" />
+                            <span>{champCount}</span>
+                          </span>
+                        </td>
+
+                        {/* Ações */}
+                        <td className="py-3 px-3.5 text-right">
+                          <div className="flex items-center justify-end gap-1 shrink-0">
+                            <button
+                              onClick={() => handleOpenEdit(user)}
+                              className="p-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/50 text-amber-300 hover:text-amber-200 transition-all cursor-pointer shadow-sm"
+                              title="Editar Perfil do Piloto (Nome, ID, Equipe, Stats)"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setDetailUser(user)}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                              title="Ver Detalhes da Conta"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            {isThyago ? (
+                              <span
+                                className="p-1.5 rounded-lg bg-slate-800/40 text-slate-600 cursor-not-allowed"
+                                title="Root Protegido contra exclusão"
+                              >
+                                <Lock className="w-3.5 h-3.5" />
+                              </span>
                             ) : (
-                              <span className="text-slate-500 text-[11px] italic">Sem equipe</span>
+                              <button
+                                onClick={() => {
+                                  setUserToDelete(user);
+                                  setConfirmationInput('');
+                                }}
+                                className="p-1.5 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-800/70 text-red-400 hover:text-red-200 transition-all cursor-pointer shadow-sm"
+                                title="Excluir Conta Permanentemente"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             )}
                           </div>
-                          <div>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border inline-flex items-center gap-1 ${tier.badgeBg} ${tier.badgeBorder} ${tier.textColor}`}>
-                              <span>{tier.badgeIcon}</span>
-                              <span className="font-mono">{user.stats?.simRating || 3000}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Cards Stack inside Table Mode (No lateral scroll on phones) */}
+            <div className="md:hidden divide-y divide-slate-800/80">
+              {filteredUsers.map((user) => {
+                const isThyago = user.email.toLowerCase().trim() === 'thyago.talm@gmail.com';
+                const tier = getSimRatingTier(user.stats?.simRating);
+                const champCount = getUserChampionshipCount(user.id, user.email);
+
+                return (
+                  <div key={user.id} className="p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <img
+                          src={user.avatar}
+                          alt={user.name}
+                          referrerPolicy="no-referrer"
+                          className="w-9 h-9 rounded-full object-cover border border-slate-700 shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-white text-xs truncate max-w-[170px]" title={user.name}>
+                              {user.name}
                             </span>
+                            {user.country && <CountryFlag country={user.country} size="xs" />}
+                          </div>
+                          <div className="text-[10px] text-slate-400 font-mono truncate max-w-[160px]">
+                            {user.email}
                           </div>
                         </div>
-                      </td>
+                      </div>
 
-                      {/* Ligas Inscritas */}
-                      <td className="py-3 px-2 text-center">
-                        <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-slate-800 text-slate-200 font-mono text-[11px] font-bold" title={`${champCount} campeonatos inscritos`}>
-                          {champCount}
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => handleOpenEdit(user)}
+                          className="p-1.5 rounded-lg bg-amber-500/15 border border-amber-500/50 text-amber-300"
+                          title="Editar Perfil"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setDetailUser(user)}
+                          className="p-1.5 rounded-lg bg-slate-800 text-slate-300"
+                          title="Detalhes"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        {!isThyago && (
+                          <button
+                            onClick={() => {
+                              setUserToDelete(user);
+                              setConfirmationInput('');
+                            }}
+                            className="p-1.5 rounded-lg bg-red-950/60 border border-red-800/70 text-red-400"
+                            title="Excluir"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                      <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400 font-mono">
+                        ID: {user.id.slice(0, 14)}...
+                      </span>
+                      <span className={`px-2 py-0.5 rounded font-bold border ${tier.badgeBg} ${tier.badgeBorder} ${tier.textColor}`}>
+                        {tier.badgeIcon} {user.stats?.simRating || 3000}
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-amber-400 font-mono">
+                        {champCount} ligas
+                      </span>
+                      {user.teamName && (
+                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-200">
+                          {user.teamTag ? `[${user.teamTag}] ` : ''}{user.teamName}
                         </span>
-                      </td>
-
-                      {/* Actions: Edit, View, Delete */}
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {/* Edit pilot button */}
-                          <button
-                            onClick={() => handleOpenEdit(user)}
-                            className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:text-amber-200 transition-colors cursor-pointer"
-                            title="Editar Perfil do Piloto (Nome, ID, Equipe, Stats)"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* View details */}
-                          <button
-                            onClick={() => setDetailUser(user)}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
-                            title="Ver Detalhes Completos da Conta"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
-
-                          {/* Delete Account */}
-                          {isThyago ? (
-                            <button
-                              disabled
-                              className="p-1.5 rounded-lg bg-slate-800/40 border border-slate-700/40 text-slate-600 cursor-not-allowed"
-                              title="Conta do Master Root protegida contra exclusão."
-                            >
-                              <Lock className="w-3.5 h-3.5" />
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                setUserToDelete(user);
-                                setConfirmationInput('');
-                              }}
-                              className="p-1.5 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-800/70 text-red-300 hover:text-red-100 transition-all cursor-pointer shadow-sm"
-                              title="Excluir totalmente esta conta"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile View: Compact Responsive Cards (ZERO lateral scroll) */}
-        <div className="md:hidden divide-y divide-slate-800/70">
-          {filteredUsers.length === 0 ? (
-            <div className="py-10 text-center text-slate-500 p-4">
-              <Users className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              Nenhuma conta encontrada com os critérios informados.
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          ) : (
-            filteredUsers.map((user) => {
+          </div>
+        ) : (
+          /* =========================================================================
+             CARDS VIEW (2-TIER CLEAN WRAPPING, ZERO HORIZONTAL SCROLLBAR)
+             ========================================================================= */
+          <div className="w-full space-y-3">
+            {filteredUsers.map((user) => {
               const isThyago = user.email.toLowerCase().trim() === 'thyago.talm@gmail.com';
               const tier = getSimRatingTier(user.stats?.simRating);
               const champCount = getUserChampionshipCount(user.id, user.email);
@@ -839,136 +988,190 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
               return (
                 <div
                   key={user.id}
-                  className={`p-4 space-y-3 transition-colors ${
-                    isThyago ? 'bg-amber-500/[0.04] border-l-4 border-l-amber-500' : ''
+                  className={`p-4 rounded-2xl border transition-all ${
+                    isThyago
+                      ? 'bg-amber-950/20 border-amber-500/50 shadow-lg shadow-amber-950/20'
+                      : 'bg-[#0c121e]/90 hover:bg-[#111827] border-slate-800/80 shadow-md hover:border-slate-700'
                   }`}
                 >
-                  {/* Pilot Header */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5 min-w-0">
+                  {/* Top Tier: Pilot Identity + Actions */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/60 pb-3">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div className="relative shrink-0">
                         <img
                           src={user.avatar}
                           alt={user.name}
                           referrerPolicy="no-referrer"
-                          className={`w-10 h-10 rounded-full object-cover border-2 ${
-                            isThyago ? 'border-amber-500' : 'border-slate-700'
+                          className={`w-11 h-11 rounded-full object-cover border-2 ${
+                            isThyago ? 'border-amber-500 shadow-md shadow-amber-500/20' : 'border-slate-700'
                           }`}
                         />
                         {isThyago && (
-                          <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center text-[9px] text-slate-950 font-bold">
+                          <span
+                            className="absolute -bottom-1 -right-1 w-4 h-4 bg-amber-500 rounded-full flex items-center justify-center text-[9px] text-slate-950 font-bold shadow"
+                            title="Admin Master Root"
+                          >
                             👑
                           </span>
                         )}
                       </div>
-                      <div className="min-w-0">
-                        <div className="font-bold text-white text-sm flex items-center gap-1.5 truncate">
-                          <span className="truncate">{user.name}</span>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-white text-sm sm:text-base truncate max-w-[240px] sm:max-w-[340px]" title={user.name}>
+                            {user.name}
+                          </span>
                           {user.country && <CountryFlag country={user.country} size="xs" />}
-                        </div>
-                        <div className="flex items-center gap-1 text-[10px] text-slate-400 font-mono truncate">
-                          <span className="truncate">ID: {user.id}</span>
-                          <button
-                            onClick={() => handleCopy(user.id, `id_${user.id}`)}
-                            className="hover:text-amber-400 p-0.5 cursor-pointer shrink-0"
-                          >
-                            {copiedId === `id_${user.id}` ? (
-                              <Check className="w-2.5 h-2.5 text-emerald-400" />
-                            ) : (
-                              <Copy className="w-2.5 h-2.5 text-slate-500" />
-                            )}
-                          </button>
+                          {isThyago ? (
+                            <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold text-[10px] uppercase tracking-wider border border-amber-500/40">
+                              Master Root
+                            </span>
+                          ) : user.role === 'admin' ? (
+                            <span className="px-2 py-0.5 rounded bg-red-950/80 text-red-300 font-semibold text-[10px] uppercase border border-red-800/60">
+                              Admin da Liga
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded bg-blue-950/60 text-blue-300 font-semibold text-[10px] uppercase border border-blue-800/60">
+                              Piloto
+                            </span>
+                          )}
+                          {user.racingNumber && (
+                            <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-white font-mono text-[10px] font-bold">
+                              #{user.racingNumber}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
 
-                    {/* Role & Rating */}
-                    <div className="flex flex-col items-end gap-1 shrink-0">
+                    {/* Action Buttons */}
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                      <button
+                        onClick={() => handleOpenEdit(user)}
+                        className="px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/50 text-amber-300 hover:text-amber-200 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                        title="Editar Perfil do Piloto (Nome, ID, Equipe, Stats)"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span>Editar</span>
+                      </button>
+
+                      <button
+                        onClick={() => setDetailUser(user)}
+                        className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        title="Ver Detalhes Completos da Conta"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Detalhes</span>
+                      </button>
+
                       {isThyago ? (
-                        <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold text-[9px] uppercase border border-amber-500/40">
-                          Master
-                        </span>
-                      ) : user.role === 'admin' ? (
-                        <span className="px-2 py-0.5 rounded bg-red-950/80 text-red-300 font-semibold text-[9px] uppercase border border-red-800/60">
-                          Admin
+                        <span
+                          className="px-2.5 py-1.5 rounded-xl bg-slate-800/40 border border-slate-800 text-slate-600 text-xs font-semibold flex items-center gap-1 cursor-not-allowed"
+                          title="Conta Master Root protegida contra exclusão"
+                        >
+                          <Lock className="w-3.5 h-3.5" />
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded bg-blue-950/60 text-blue-300 font-semibold text-[9px] uppercase border border-blue-800/60">
-                          Piloto
+                        <button
+                          onClick={() => {
+                            setUserToDelete(user);
+                            setConfirmationInput('');
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-red-950/60 hover:bg-red-900 border border-red-800/70 text-red-300 hover:text-red-100 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+                          title="Excluir Conta Permanentemente"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                          <span>Excluir</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bottom Tier: Fluid Wrapping Chips (Guaranteed zero overflow) */}
+                  <div className="pt-3 flex flex-wrap items-center gap-2 text-xs">
+                    {/* ID Chip */}
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 font-mono text-[11px] max-w-full">
+                      <span className="text-slate-500">ID:</span>
+                      <span className="truncate max-w-[140px] sm:max-w-[200px] select-all" title={user.id}>
+                        {user.id}
+                      </span>
+                      <button
+                        onClick={() => handleCopy(user.id, `id_${user.id}`)}
+                        title="Copiar ID"
+                        className="hover:text-amber-400 p-0.5 cursor-pointer text-slate-500 hover:text-white shrink-0"
+                      >
+                        {copiedId === `id_${user.id}` ? (
+                          <Check className="w-2.5 h-2.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-2.5 h-2.5" />
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Email Chip */}
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 font-mono text-[11px] max-w-full">
+                      <span className="truncate max-w-[170px] sm:max-w-[240px]" title={user.email}>
+                        {user.email}
+                      </span>
+                      <button
+                        onClick={() => handleCopy(user.email, `email_${user.id}`)}
+                        title="Copiar E-mail"
+                        className="hover:text-amber-400 p-0.5 cursor-pointer text-slate-500 shrink-0"
+                      >
+                        {copiedId === `email_${user.id}` ? (
+                          <Check className="w-2.5 h-2.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-2.5 h-2.5" />
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Team Chip */}
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs">
+                      {user.teamName ? (
+                        <>
+                          {user.teamTag && (
+                            <span className="px-1.5 py-0.2 rounded bg-slate-800 text-amber-400 font-mono font-bold text-[10px]">
+                              {user.teamTag}
+                            </span>
+                          )}
+                          <span className="font-medium truncate max-w-[140px]" title={user.teamName}>
+                            {user.teamName}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-slate-500 italic text-[11px]">Sem equipe</span>
+                      )}
+                    </div>
+
+                    {/* Sim Rating Chip */}
+                    <div className={`px-2.5 py-1 rounded-xl text-xs font-bold border inline-flex items-center gap-1.5 ${tier.badgeBg} ${tier.badgeBorder} ${tier.textColor}`}>
+                      <span>{tier.badgeIcon}</span>
+                      <span className="font-mono">{user.stats?.simRating || 3000}</span>
+                    </div>
+
+                    {/* Platform Chip */}
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-950 border border-slate-800 text-slate-300 text-[11px]">
+                      <Gamepad2 className="w-3 h-3 text-slate-500" />
+                      <span>{user.gamingPlatform || 'Steam'}</span>
+                      {(user.gamingId || user.steamId) && (
+                        <span className="font-mono text-slate-400 truncate max-w-[100px]" title={user.gamingId || user.steamId}>
+                          · {user.gamingId || user.steamId}
                         </span>
                       )}
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border inline-flex items-center gap-1 ${tier.badgeBg} ${tier.badgeBorder} ${tier.textColor}`}>
-                        <span>{tier.badgeIcon}</span>
-                        <span className="font-mono">{user.stats?.simRating || 3000}</span>
-                      </span>
                     </div>
-                  </div>
 
-                  {/* Info Grid */}
-                  <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80">
-                    <div className="truncate">
-                      <span className="text-slate-500 block text-[9px] uppercase">E-mail</span>
-                      <span className="text-slate-300 font-mono truncate block" title={user.email}>{user.email}</span>
+                    {/* Championships Count Chip */}
+                    <div className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-950 border border-slate-800 text-amber-400 font-mono text-[11px] font-bold">
+                      <Car className="w-3 h-3 text-amber-400" />
+                      <span>{champCount} liga(s)</span>
                     </div>
-                    <div className="truncate">
-                      <span className="text-slate-500 block text-[9px] uppercase">Equipe</span>
-                      <span className="text-white truncate block">
-                        {user.teamName ? (
-                          <>
-                            {user.teamTag && <strong className="text-amber-400 mr-1">[{user.teamTag}]</strong>}
-                            {user.teamName}
-                          </>
-                        ) : (
-                          <span className="text-slate-500 italic">Sem equipe</span>
-                        )}
-                      </span>
-                    </div>
-                    <div className="truncate">
-                      <span className="text-slate-500 block text-[9px] uppercase">Plataforma</span>
-                      <span className="text-slate-300 truncate block">{user.gamingPlatform || 'Steam (PC)'}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 block text-[9px] uppercase">Ligas</span>
-                      <span className="text-amber-400 font-mono font-bold block">{champCount} campeonato(s)</span>
-                    </div>
-                  </div>
-
-                  {/* Actions Row */}
-                  <div className="flex items-center justify-end gap-2 pt-1">
-                    <button
-                      onClick={() => handleOpenEdit(user)}
-                      className="flex-1 py-1.5 px-3 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                      <span>Editar Perfil</span>
-                    </button>
-
-                    <button
-                      onClick={() => setDetailUser(user)}
-                      className="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>Detalhes</span>
-                    </button>
-
-                    {!isThyago && (
-                      <button
-                        onClick={() => {
-                          setUserToDelete(user);
-                          setConfirmationInput('');
-                        }}
-                        className="py-1.5 px-3 rounded-lg bg-red-950/70 hover:bg-red-900 border border-red-800/80 text-red-300 text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                        <span>Excluir</span>
-                      </button>
-                    )}
                   </div>
                 </div>
               );
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
       </div>
 
       {/* Edit Pilot Profile Modal (Master Admin Only) */}

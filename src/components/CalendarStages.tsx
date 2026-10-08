@@ -16,7 +16,7 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
   onOpenResultsModal,
   onOpenStageEditor,
 }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, users } = useAuth();
   const { activeChampionship, deleteStage, isUserLeagueAdmin } = useChampionships();
   
   // State for stage deletion confirmation dialog
@@ -253,7 +253,7 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
                       <div className="bg-slate-950/90 border border-slate-800 p-2.5 rounded-lg text-xs min-w-[200px] border-l-2 border-l-amber-400 shadow-sm">
                         <div className="flex items-center gap-1.5 text-amber-400 font-semibold mb-1">
                           <Award className="w-3.5 h-3.5" />
-                          <span>Vencedor: {winner.driverName}</span>
+                          <span>Vencedor: {users.find((u) => u.id === winner.driverId)?.name || winner.driverName}</span>
                         </div>
                         <div className="text-[11px] text-slate-400 flex items-center justify-between">
                           <span>Equipe: <strong className="text-slate-300 font-medium">{winner.teamName}</strong></span>

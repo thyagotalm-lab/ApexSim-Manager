@@ -522,7 +522,7 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
                   </span>
                   <div>
                     <div className="text-xs font-bold text-white flex items-center gap-2">
-                      <span>{pilot.userName}</span>
+                      <span>{users.find((u) => u.id === pilot.userId || (pilot.userEmail && u.email?.toLowerCase().trim() === pilot.userEmail.toLowerCase().trim()))?.name || pilot.userName}</span>
                       {pilot.discord && (
                         <span className="text-[10px] text-slate-400 flex items-center gap-1 font-mono">
                           <MessageSquare className="w-3 h-3 text-indigo-400" />
@@ -663,7 +663,7 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
                           className="w-8 h-8 rounded-full bg-slate-800 border-2 flex items-center justify-center text-xs font-bold text-slate-300"
                           style={{ borderColor: isReserve ? '#f59e0b' : teamColor }}
                         >
-                          {pilot.userName.charAt(0)}
+                          {(pilotUser?.name || pilot.userName).charAt(0)}
                         </div>
                       )}
                       {pilotUser?.country && (
@@ -676,7 +676,7 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
                     {/* Pilot Name & Category */}
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-white text-xs truncate">
-                        {pilot.userName}
+                        {pilotUser?.name || pilot.userName}
                       </div>
                       {(() => {
                         const tier = getSimRatingTier(pilotUser?.stats?.simRating);
@@ -846,7 +846,7 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
                           <CountryFlag country={pilotUser.country} size="xs" />
                         )}
                         <div>
-                          <div className="font-semibold text-white">{pilot.userName}</div>
+                          <div className="font-semibold text-white">{pilotUser?.name || pilot.userName}</div>
                         </div>
                       </div>
                     </td>
@@ -970,7 +970,7 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
               <div key={p.id} className="p-2.5 rounded-lg bg-slate-950 border border-slate-800/80 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-red-400 font-bold">#{p.carNumber}</span>
-                  <span className="text-white font-medium">{p.userName}</span>
+                  <span className="text-white font-medium">{users.find((u) => u.id === p.userId || (p.userEmail && u.email?.toLowerCase().trim() === p.userEmail.toLowerCase().trim()))?.name || p.userName}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-slate-400">{p.teamName}</span>

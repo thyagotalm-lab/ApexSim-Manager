@@ -81,6 +81,8 @@ interface ChampionshipContextType {
     fastestLapCount: number;
     totalCommunityTrophies: number;
   };
+  propagatePilotProfileUpdate: (oldId: string, newId: string, newName: string, userEmail?: string) => Promise<void>;
+  reloadChampionships: () => Promise<void>;
 }
 
 const MOCK_CHAMPIONSHIP_IDS = new Set([
@@ -1204,6 +1206,142 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
   };
 
+  const propagatePilotProfileUpdate = async (
+    oldId: string,
+    newId: string,
+    newName: string,
+    userEmail?: string
+  ) => {
+    const cleanOldId = oldId.trim();
+    const cleanNewId = (newId || oldId).trim();
+    const cleanNewName = newName.trim();
+    const cleanEmail = (userEmail || '').toLowerCase().trim();
+
+    setChampionships((prev) => {
+      const updated = prev.map((champ) => {
+        let changed = false;
+
+        // 1. Registrations
+        const updatedRegistrations = (champ.registrations || []).map((reg) => {
+          const regEmail = (reg.userEmail || '').toLowerCase().trim();
+          const matches =
+            reg.userId === cleanOldId ||
+            reg.userId === cleanNewId ||
+            (cleanEmail && regEmail === cleanEmail);
+
+          if (matches) {
+            changed = true;
+            return {
+              ...reg,
+              userId: cleanNewId,
+              userName: cleanNewName || reg.userName,
+            };
+          }
+          return reg;
+        });
+
+        // 2. AdminIds
+        const updatedAdminIds = (champ.adminIds || []).map((adminId) => {
+          if (adminId === cleanOldId) {
+            changed = true;
+            return cleanNewId;
+          }
+          return adminId;
+        });
+
+        // 3. Stages, results, awards, protests
+        const updatedStages = (champ.stages || []).map((stage) => {
+          let stageChanged = false;
+
+          const updatedResults = (stage.results || []).map((res) => {
+            if (res.driverId === cleanOldId || res.driverId === cleanNewId) {
+              stageChanged = true;
+              return {
+                ...res,
+                driverId: cleanNewId,
+                driverName: cleanNewName || res.driverName,
+              };
+            }
+            return res;
+          });
+
+          let updatedPole = stage.poleDriverId;
+          if (stage.poleDriverId === cleanOldId) {
+            stageChanged = true;
+            updatedPole = cleanNewId;
+          }
+
+          let updatedFL = stage.fastestLapDriverId;
+          if (stage.fastestLapDriverId === cleanOldId) {
+            stageChanged = true;
+            updatedFL = cleanNewId;
+          }
+
+          let updatedTrophies = stage.communityTrophies;
+          if (stage.communityTrophies?.driverOfTheDay) {
+            const dotd = stage.communityTrophies.driverOfTheDay;
+            if (dotd.winnerDriverId === cleanOldId || dotd.winnerDriverId === cleanNewId) {
+              stageChanged = true;
+              updatedTrophies = {
+                ...stage.communityTrophies,
+                driverOfTheDay: {
+                  ...dotd,
+                  winnerDriverId: cleanNewId,
+                  winnerDriverName: cleanNewName || dotd.winnerDriverName,
+                },
+              };
+            }
+          }
+
+          if (stageChanged) {
+            changed = true;
+            return {
+              ...stage,
+              results: updatedResults,
+              poleDriverId: updatedPole,
+              fastestLapDriverId: updatedFL,
+              communityTrophies: updatedTrophies,
+            };
+          }
+          return stage;
+        });
+
+        if (changed) {
+          const updatedChamp = {
+            ...champ,
+            registrations: updatedRegistrations,
+            adminIds: updatedAdminIds,
+            stages: updatedStages,
+          };
+          saveChampionshipToCloud(updatedChamp).catch(() => {});
+          return updatedChamp;
+        }
+        return champ;
+      });
+
+      try {
+        localStorage.setItem('apexsim_championships_db', JSON.stringify(updated));
+      } catch (_) {}
+
+      return updated;
+    });
+  };
+
+  const reloadChampionships = async () => {
+    try {
+      const res = await syncBackendWithFirestoreChampionships();
+      if (Array.isArray(res)) {
+        const filtered = res.filter(isRealChampionship);
+        setChampionships(filtered);
+        try {
+          localStorage.setItem('apexsim_championships_db', JSON.stringify(filtered));
+        } catch (_) {}
+      }
+    } catch (e) {
+      console.warn('Reload championships error:', e);
+    }
+  };
+
   return (
     <ChampionshipContext.Provider
       value={{
@@ -1234,6 +1372,8 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
         voteDriverOfTheDay,
         closeDriverOfTheDayVoting,
         getDriverCommunityTrophies,
+        propagatePilotProfileUpdate,
+        reloadChampionships,
       }}
     >
       {children}

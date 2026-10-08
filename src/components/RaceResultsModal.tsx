@@ -14,7 +14,7 @@ interface RaceResultsModalProps {
 }
 
 export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClose }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, users } = useAuth();
   const { activeChampionship, recordRaceResults, isUserLeagueAdmin } = useChampionships();
   const { sendNotification } = useNotifications();
 
@@ -25,15 +25,30 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClo
   // Initialize results list from stage results or from approved/reserve registrations
   const [resultsList, setResultsList] = useState<RaceResultItem[]>(() => {
     if (stage.results && stage.results.length > 0) {
-      return [...stage.results];
+      return stage.results.map((r) => {
+        const u = users.find(
+          (user) =>
+            user.id === r.driverId ||
+            (r.driverName && user.name.toLowerCase().trim() === r.driverName.toLowerCase().trim())
+        );
+        return {
+          ...r,
+          driverName: u?.name || r.driverName,
+        };
+      });
     }
 
     const gridDrivers = activeChampionship.registrations.filter((r) => r.status === 'APROVADO' || r.status === 'RESERVA');
     return gridDrivers.map((driver, index) => {
+      const u = users.find(
+        (user) =>
+          user.id === driver.userId ||
+          (driver.userEmail && user.email.toLowerCase().trim() === driver.userEmail.toLowerCase().trim())
+      );
       const isReserve = driver.status === 'RESERVA' || Boolean(driver.isReserve) || driver.teamName?.toLowerCase() === 'reserva';
       return {
         driverId: driver.userId,
-        driverName: driver.userName,
+        driverName: u?.name || driver.userName,
         teamName: isReserve ? 'Reserva' : driver.teamName,
         carModel: driver.carModel,
         number: driver.carNumber,
@@ -464,7 +479,7 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClo
                           </span>
                           <div>
                             <div className="font-semibold text-white flex items-center gap-1.5">
-                              {item.driverName}
+                              {users.find((u) => u.id === item.driverId)?.name || item.driverName}
                               {isPole && (
                                 <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-500/50 px-1.5 py-0.5 rounded font-mono font-bold flex items-center gap-1 shadow-sm">
                                   <span>POLE</span>

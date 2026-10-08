@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, Trophy, Users, Image as ImageIcon } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
 import { calculateConstructorStandings } from '../utils/standings';
 import { CountryFlag } from './CountryFlag';
@@ -7,6 +8,7 @@ import { getTeamsBySimulator, getTeamCode } from '../data/f1Teams';
 import { ExportStandingsModal } from './ExportStandingsModal';
 
 export const ConstructorStandingsTable: React.FC = () => {
+  const { users } = useAuth();
   const { activeChampionship } = useChampionships();
   const [isExportImageModalOpen, setIsExportImageModalOpen] = useState(false);
 
@@ -22,7 +24,7 @@ export const ConstructorStandingsTable: React.FC = () => {
     );
   }
 
-  const constructorStandings = calculateConstructorStandings(activeChampionship);
+  const constructorStandings = calculateConstructorStandings(activeChampionship, users);
   const completedStages = activeChampionship.stages.filter(
     (s) => s.status === 'Concluída' && s.results && s.results.length > 0
   );

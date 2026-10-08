@@ -1,4 +1,4 @@
-import { Championship, DriverStanding, StageRound } from '../types';
+import { Championship, DriverStanding, StageRound, User } from '../types';
 import { calculateDriverStandings } from './standings';
 
 export type TitleContentionStatus =
@@ -54,8 +54,11 @@ export interface SimulatedRoundInput {
   hasFastestLap: boolean;
 }
 
-export function calculateTitleMathematics(championship: Championship): ChampionshipTitleOverview {
-  const standings = calculateDriverStandings(championship);
+export function calculateTitleMathematics(
+  championship: Championship,
+  users?: User[]
+): ChampionshipTitleOverview {
+  const standings = calculateDriverStandings(championship, users);
   const stages = championship.stages || [];
   const completedStages = stages.filter((s) => s.status === 'Concluída');
   const remainingStages = stages.filter((s) => s.status !== 'Concluída');

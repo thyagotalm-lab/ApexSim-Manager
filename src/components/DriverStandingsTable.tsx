@@ -38,7 +38,7 @@ export const DriverStandingsTable: React.FC<DriverStandingsTableProps> = ({
     );
   }
 
-  const standings = calculateDriverStandings(activeChampionship);
+  const standings = calculateDriverStandings(activeChampionship, users);
   const completedStages = activeChampionship.stages.filter(
     (s) => s.status === 'Concluída' && s.results && s.results.length > 0
   );

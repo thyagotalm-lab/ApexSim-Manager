@@ -35,7 +35,7 @@ export const TitleSimulatorModal: React.FC<TitleSimulatorModalProps> = ({
   onClose,
   defaultDriverId,
 }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, users } = useAuth();
   const { activeChampionship } = useChampionships();
 
   const [activeTab, setActiveTab] = useState<'analyzer' | 'simulator'>('analyzer');
@@ -45,8 +45,8 @@ export const TitleSimulatorModal: React.FC<TitleSimulatorModalProps> = ({
   // Selected driver to analyze
   const titleMath = useMemo(() => {
     if (!activeChampionship) return null;
-    return calculateTitleMathematics(activeChampionship);
-  }, [activeChampionship]);
+    return calculateTitleMathematics(activeChampionship, users);
+  }, [activeChampionship, users]);
 
   // Initial target driver selection
   const [selectedDriverId, setSelectedDriverId] = useState<string>(() => {

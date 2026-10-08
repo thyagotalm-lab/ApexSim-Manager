@@ -85,8 +85,8 @@ export const ChampionshipOverview: React.FC<ChampionshipOverviewProps> = ({
     );
   }
 
-  const driverStandings = calculateDriverStandings(activeChampionship);
-  const constructorStandings = calculateConstructorStandings(activeChampionship);
+  const driverStandings = calculateDriverStandings(activeChampionship, users);
+  const constructorStandings = calculateConstructorStandings(activeChampionship, users);
 
   const completedStages = activeChampionship.stages.filter(
     (s) => s.status === 'Concluída' && s.results && s.results.length > 0
@@ -120,7 +120,7 @@ export const ChampionshipOverview: React.FC<ChampionshipOverviewProps> = ({
 
   const occupancyRate = Math.round((approvedRegistrations.length / activeChampionship.maxGrid) * 100);
   const [isTitleSimulatorOpen, setIsTitleSimulatorOpen] = useState(false);
-  const titleMath = calculateTitleMathematics(activeChampionship);
+  const titleMath = calculateTitleMathematics(activeChampionship, users);
 
   return (
     <div className="space-y-6">
