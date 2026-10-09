@@ -10,22 +10,29 @@ import { Trophy, ListOrdered } from 'lucide-react';
 
 interface RaceResultsModalProps {
   stage: StageRound | null;
+  initialRaceType?: 'main' | 'sprint';
   onClose: () => void;
 }
 
-export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClose }) => {
+export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, initialRaceType = 'main', onClose }) => {
   const { currentUser, users } = useAuth();
-  const { activeChampionship, recordRaceResults, isUserLeagueAdmin } = useChampionships();
+  const { activeChampionship, recordRaceResults, recordSprintResults, isUserLeagueAdmin } = useChampionships();
   const { sendNotification } = useNotifications();
 
   if (!stage || !activeChampionship) return null;
 
   const isAdmin = isUserLeagueAdmin(activeChampionship.id, currentUser?.id);
 
-  // Initialize results list from stage results or from approved/reserve registrations
-  const [resultsList, setResultsList] = useState<RaceResultItem[]>(() => {
-    if (stage.results && stage.results.length > 0) {
-      return stage.results.map((r) => {
+  // Active race mode: 'main' (Corrida Principal) or 'sprint' (Corrida Sprint)
+  const [raceType, setRaceType] = useState<'main' | 'sprint'>(
+    initialRaceType || (stage.hasSprint && !stage.results?.length && stage.sprintResults?.length ? 'sprint' : 'main')
+  );
+
+  // Helper to build initial results array
+  const createInitialList = (type: 'main' | 'sprint'): RaceResultItem[] => {
+    const existing = type === 'sprint' ? stage.sprintResults : stage.results;
+    if (existing && existing.length > 0) {
+      return existing.map((r) => {
         const u = users.find(
           (user) =>
             user.id === r.driverId ||
@@ -39,6 +46,7 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClo
     }
 
     const gridDrivers = activeChampionship.registrations.filter((r) => r.status === 'APROVADO' || r.status === 'RESERVA');
+    const isSprint = type === 'sprint';
     return gridDrivers.map((driver, index) => {
       const u = users.find(
         (user) =>
@@ -54,9 +62,9 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClo
         number: driver.carNumber,
         gridPosition: index + 1,
         finishPosition: index + 1,
-        status: 'FINISHED',
-        totalTime: index === 0 ? '45:00.000' : '',
-        gap: index === 0 ? 'Líder' : `+${(index * 4.2).toFixed(3)}s`,
+        status: 'FINISHED' as const,
+        totalTime: index === 0 ? (isSprint ? '22:00.000' : '45:00.000') : '',
+        gap: index === 0 ? 'Líder' : `+${(index * (isSprint ? 2.1 : 4.2)).toFixed(3)}s`,
         pointsAwarded: 0,
         penaltiesPoints: 0,
         penaltyNotes: '',
@@ -65,17 +73,32 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClo
         isReserve,
       };
     });
-  });
+  };
 
-  const [poleDriverId, setPoleDriverId] = useState<string>(stage.poleDriverId || resultsList[0]?.driverId || '');
+  const [mainResultsList, setMainResultsList] = useState<RaceResultItem[]>(() => createInitialList('main'));
+  const [sprintResultsList, setSprintResultsList] = useState<RaceResultItem[]>(() => createInitialList('sprint'));
+
+  const resultsList = raceType === 'sprint' ? sprintResultsList : mainResultsList;
+  const setResultsList = (updated: RaceResultItem[]) => {
+    if (raceType === 'sprint') {
+      setSprintResultsList(updated);
+    } else {
+      setMainResultsList(updated);
+    }
+  };
+
+  // Main Race Pole & Fastest Lap
+  const [poleDriverId, setPoleDriverId] = useState<string>(stage.poleDriverId || mainResultsList[0]?.driverId || '');
   const [poleTime, setPoleTime] = useState<string>(stage.poleTime || '1:29.840');
-  const [fastestLapDriverId, setFastestLapDriverId] = useState<string>(stage.fastestLapDriverId || resultsList[0]?.driverId || '');
+  const [fastestLapDriverId, setFastestLapDriverId] = useState<string>(stage.fastestLapDriverId || mainResultsList[0]?.driverId || '');
   const [fastestLapTime, setFastestLapTime] = useState<string>(stage.fastestLapTime || '1:30.120');
 
   const poleBonus = activeChampionship.scoringRule?.poleBonus || 0;
   const fastestLapBonus = activeChampionship.scoringRule?.fastestLapBonus || 0;
-  const hasPoleBonus = poleBonus > 0;
-  const hasFastestLapBonus = fastestLapBonus > 0;
+  const hasPoleBonus = raceType === 'main' && poleBonus > 0;
+  const hasFastestLapBonus = raceType === 'main' && fastestLapBonus > 0;
+
+  const sprintRulePositions = activeChampionship.scoringRule?.sprintPositions || [8, 7, 6, 5, 4, 3, 2, 1];
 
   const [modalTab, setModalTab] = useState<'results' | 'dotd'>('results');
 
@@ -84,9 +107,16 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClo
     pos: number,
     driverId: string,
     status: RaceResultItem['status'],
-    penalty: number = 0
+    penalty: number = 0,
+    targetType: 'main' | 'sprint' = raceType
   ) => {
     if (status !== 'FINISHED') return 0;
+
+    if (targetType === 'sprint') {
+      const basePoints = sprintRulePositions[pos - 1] || 0;
+      return Math.max(0, basePoints - penalty);
+    }
+
     const rule = activeChampionship.scoringRule;
     const basePoints = rule.positions[pos - 1] || 0;
     const polePt = driverId === poleDriverId && hasPoleBonus ? poleBonus : 0;
@@ -107,8 +137,8 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClo
     const remapped = updated.map((item, idx) => ({
       ...item,
       finishPosition: idx + 1,
-      gap: idx === 0 ? 'Líder' : item.gap || `+${(idx * 3.5).toFixed(3)}s`,
-      pointsAwarded: computePoints(idx + 1, item.driverId, item.status, item.penaltiesPoints),
+      gap: idx === 0 ? 'Líder' : item.gap || `+${(idx * (raceType === 'sprint' ? 2.1 : 3.5)).toFixed(3)}s`,
+      pointsAwarded: computePoints(idx + 1, item.driverId, item.status, item.penaltiesPoints, raceType),
     }));
 
     setResultsList(remapped);
@@ -121,7 +151,8 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClo
       updated[index].finishPosition,
       updated[index].driverId,
       newStatus,
-      updated[index].penaltiesPoints
+      updated[index].penaltiesPoints,
+      raceType
     );
     setResultsList(updated);
   };
@@ -134,14 +165,55 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClo
       updated[index].finishPosition,
       updated[index].driverId,
       updated[index].status,
-      penalty
+      penalty,
+      raceType
     );
     setResultsList(updated);
   };
 
   const handleSave = () => {
-    // Final points check
-    const finalized = resultsList.map((item) => {
+    if (raceType === 'sprint') {
+      // Final points check for Sprint
+      const finalizedSprint = sprintResultsList.map((item) => {
+        const reg = activeChampionship.registrations.find((r) => r.userId === item.driverId);
+        const isReserve = Boolean(item.isReserve) || reg?.status === 'RESERVA' || Boolean(reg?.isReserve);
+        return {
+          ...item,
+          isReserve,
+          teamName: isReserve ? 'Reserva' : item.teamName,
+          pointsAwarded: computePoints(
+            item.finishPosition,
+            item.driverId,
+            item.status,
+            item.penaltiesPoints,
+            'sprint'
+          ),
+        };
+      });
+
+      recordSprintResults(
+        activeChampionship.id,
+        stage.id,
+        finalizedSprint
+      );
+
+      // Send broadcast notification for Sprint
+      sendNotification({
+        userId: 'all',
+        title: `⚡ Resultados Sprint Homologados: ${stage.trackName}`,
+        message: `A classificação oficial da Corrida Sprint da Etapa ${stage.roundNumber} foi publicada! Os pontos já estão valendo na tabela.`,
+        type: 'RACE_RESULT',
+        linkTab: 'standings-drivers',
+        championshipId: activeChampionship.id,
+        stageId: stage.id,
+      }).catch(() => {});
+
+      onClose();
+      return;
+    }
+
+    // Main race saving
+    const finalized = mainResultsList.map((item) => {
       const reg = activeChampionship.registrations.find((r) => r.userId === item.driverId);
       const isReserve = Boolean(item.isReserve) || reg?.status === 'RESERVA' || Boolean(reg?.isReserve);
       return {
@@ -154,7 +226,8 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClo
           item.finishPosition,
           item.driverId,
           item.status,
-          item.penaltiesPoints
+          item.penaltiesPoints,
+          'main'
         ),
       };
     });
@@ -196,11 +269,42 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClo
               </span>
               {isAdmin && <span className="bg-red-950 text-red-300 border border-red-800 text-[10px] px-1.5 py-0.5 rounded">Modo Administrador</span>}
             </div>
-            <h2 className="text-lg sm:text-xl font-bold text-white font-display">
-              Resultados Oficiais: {stage.trackName}
+            <h2 className="text-lg sm:text-xl font-bold text-white font-display flex items-center gap-2 flex-wrap">
+              <span>Resultados Oficiais: {stage.trackName}</span>
+              {raceType === 'sprint' ? (
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/50 inline-flex items-center gap-1 font-sans">
+                  <Zap className="w-3 h-3 text-amber-400" />
+                  Corrida Sprint
+                </span>
+              ) : (
+                <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-red-600/20 text-red-300 border border-red-500/50 inline-flex items-center gap-1 font-sans">
+                  <Award className="w-3 h-3 text-red-400" />
+                  Corrida Principal
+                </span>
+              )}
             </h2>
             <div className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-1.5">
-              <span>Sistema de pontuação: <strong className="text-slate-200">{activeChampionship.scoringRule.name}</strong></span>
+              {raceType === 'sprint' ? (
+                <>
+                  <span className="text-amber-300 font-semibold flex items-center gap-1">
+                    <Zap className="w-3 h-3 text-amber-400" />
+                    Pontuação Sprint da Liga:
+                  </span>
+                  <span className="font-mono text-slate-200 font-semibold bg-slate-900 border border-slate-800 px-2 py-0.5 rounded">
+                    [{sprintRulePositions.join(', ')}] pts
+                  </span>
+                  <span className="text-[11px] text-amber-400/90 bg-amber-950/40 border border-amber-900/50 px-2 py-0.5 rounded">
+                    *Reservas pontuam somente para o campeonato de pilotos
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span>Sistema de pontuação: <strong className="text-slate-200">{activeChampionship.scoringRule.name}</strong></span>
+                  <span className="font-mono text-slate-300 bg-slate-900 border border-slate-800 px-1.5 py-0.5 rounded text-[11px]">
+                    [{activeChampionship.scoringRule.positions.join(', ')}]
+                  </span>
+                </>
+              )}
               {hasPoleBonus ? (
                 <span className="inline-flex items-center gap-1 text-[11px] bg-amber-950/60 border border-amber-800/80 text-amber-300 px-1.5 py-0.5 rounded font-semibold">
                   <Award className="w-3 h-3 text-amber-400" />
@@ -233,19 +337,63 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClo
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex border-b border-slate-800 bg-slate-900/40 px-4 pt-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => setModalTab('results')}
-            className={`py-2 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
-              modalTab === 'results'
-                ? 'border-red-500 text-white bg-red-500/10 rounded-t-lg'
-                : 'border-transparent text-slate-400 hover:text-white'
-            }`}
-          >
-            <ListOrdered className="w-3.5 h-3.5" />
-            <span>Classificação Oficial</span>
-          </button>
+        <div className="flex flex-wrap items-center justify-between border-b border-slate-800 bg-slate-900/40 px-4 pt-2 shrink-0 gap-2">
+          <div className="flex items-center gap-1">
+            {stage.hasSprint ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRaceType('sprint');
+                    setModalTab('results');
+                  }}
+                  className={`py-2 px-3.5 text-xs font-bold transition-all border-b-2 flex items-center gap-1.5 cursor-pointer ${
+                    modalTab === 'results' && raceType === 'sprint'
+                      ? 'border-amber-500 text-amber-300 bg-amber-500/15 rounded-t-lg'
+                      : 'border-transparent text-slate-400 hover:text-amber-200'
+                  }`}
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Corrida Sprint</span>
+                  {stage.sprintResults && stage.sprintResults.length > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" title="Resultados lançados" />
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRaceType('main');
+                    setModalTab('results');
+                  }}
+                  className={`py-2 px-3.5 text-xs font-bold transition-all border-b-2 flex items-center gap-1.5 cursor-pointer ${
+                    modalTab === 'results' && raceType === 'main'
+                      ? 'border-red-500 text-white bg-red-500/15 rounded-t-lg'
+                      : 'border-transparent text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Award className="w-3.5 h-3.5 text-red-400" />
+                  <span>Corrida Principal</span>
+                  {stage.results && stage.results.length > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" title="Resultados lançados" />
+                  )}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setModalTab('results')}
+                className={`py-2 px-4 text-xs font-bold transition-all border-b-2 flex items-center gap-2 cursor-pointer ${
+                  modalTab === 'results'
+                    ? 'border-red-500 text-white bg-red-500/10 rounded-t-lg'
+                    : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                <ListOrdered className="w-3.5 h-3.5" />
+                <span>Classificação Oficial</span>
+              </button>
+            )}
+          </div>
 
           <button
             type="button"
@@ -272,8 +420,9 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClo
             <DriverOfTheDayVoting stage={stage} />
           ) : (
             <>
-              {/* Pole & Fastest Lap Controls (Editable for admin) */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 sm:p-3.5 bg-slate-950 rounded-xl border border-slate-800 min-w-0 overflow-hidden">
+              {/* Pole & Fastest Lap Controls (Main race) or Sprint Info Banner */}
+              {raceType === 'main' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 sm:p-3.5 bg-slate-950 rounded-xl border border-slate-800 min-w-0 overflow-hidden">
                 {/* Pole Position */}
                 <div
                   className={`p-3 rounded-lg border transition-all min-w-0 overflow-hidden flex flex-col justify-between ${
@@ -394,6 +543,23 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClo
                   )}
                 </div>
               </div>
+              ) : (
+                <div className="p-3 sm:p-4 rounded-xl bg-amber-950/20 border border-amber-800/40 flex items-center justify-between gap-3 text-xs text-amber-200">
+                  <div className="flex items-center gap-2.5">
+                    <Zap className="w-5 h-5 text-amber-400 shrink-0" />
+                    <div>
+                      <div className="font-bold text-amber-300">Lançamento de Resultados da Corrida Sprint</div>
+                      <div className="text-[11px] text-slate-300 mt-0.5">
+                        Modelo de pontuação configurado na criação da liga: <strong className="text-amber-300 font-mono">[{sprintRulePositions.join(', ')}]</strong>.
+                        Pilotos regulares somam pontos para pilotos e equipes; pilotos reservas pontuam exclusivamente para o campeonato de pilotos.
+                      </div>
+                    </div>
+                  </div>
+                  <span className="hidden sm:inline-block px-2.5 py-1 rounded bg-amber-500/20 border border-amber-500/40 text-[10px] font-bold text-amber-300 uppercase tracking-wider shrink-0 font-mono">
+                    Sprint FIA
+                  </span>
+                </div>
+              )}
 
               {/* Results Table */}
               <div className="rounded-xl border border-slate-800 overflow-x-auto">
@@ -605,10 +771,14 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({ stage, onClo
             {isAdmin && (
               <button
                 onClick={handleSave}
-                className="px-5 py-2 rounded-xl bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white text-xs font-semibold shadow-md shadow-red-950 transition-all flex items-center gap-1.5 cursor-pointer"
+                className={`px-5 py-2 rounded-xl text-xs font-semibold shadow-md transition-all flex items-center gap-1.5 cursor-pointer ${
+                  raceType === 'sprint'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold shadow-amber-950/50'
+                    : 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white shadow-red-950'
+                }`}
               >
                 <Check className="w-4 h-4" />
-                <span>Salvar & Homologar Resultados</span>
+                <span>{raceType === 'sprint' ? 'Salvar & Homologar Sprint' : 'Salvar & Homologar Resultados'}</span>
               </button>
             )}
           </div>

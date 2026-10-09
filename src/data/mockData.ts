@@ -3,6 +3,7 @@ import { Championship, ScoringRule, User } from '../types';
 export const DEFAULT_FIA_SCORING: ScoringRule = {
   name: 'Padrão FIA / StopAndGo (25-18-15...)',
   positions: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
+  sprintPositions: [8, 7, 6, 5, 4, 3, 2, 1],
   poleBonus: 1,
   fastestLapBonus: 1,
   dropWorstRounds: 0,

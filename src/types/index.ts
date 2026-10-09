@@ -73,6 +73,9 @@ export interface ScoringRule {
   poleBonus: number;
   fastestLapBonus: number;
   dropWorstRounds: number;
+  sprintPositions?: number[];
+  sprintPoleBonus?: number;
+  sprintFastestLapBonus?: number;
 }
 
 export interface RaceResultItem {
@@ -134,6 +137,11 @@ export interface StageRound {
   fastestLapDriverId?: string;
   fastestLapTime?: string;
   results?: RaceResultItem[];
+  sprintResults?: RaceResultItem[];
+  sprintPoleDriverId?: string;
+  sprintPoleTime?: string;
+  sprintFastestLapDriverId?: string;
+  sprintFastestLapTime?: string;
   communityTrophies?: CommunityTrophies;
 }
 
@@ -240,8 +248,11 @@ export interface DriverStanding {
   teamName: string;
   carModel: string;
   number: number;
-  roundPoints: Record<number, number>; // roundNumber -> points
+  roundPoints: Record<number, number>; // roundNumber -> total points (main + sprint)
+  roundSprintPoints?: Record<number, number>; // roundNumber -> sprint points specifically
+  roundMainPoints?: Record<number, number>; // roundNumber -> main race points specifically
   totalPoints: number;
+  sprintTotalPoints?: number;
   wins: number;
   podiums: number;
   poles: number;
@@ -256,8 +267,11 @@ export interface ConstructorStanding {
   teamName: string;
   carBrand: string;
   driverNames: string[];
-  roundPoints: Record<number, number>;
+  roundPoints: Record<number, number>; // roundNumber -> total team points (main + sprint)
+  roundSprintPoints?: Record<number, number>; // roundNumber -> team sprint points specifically
+  roundMainPoints?: Record<number, number>; // roundNumber -> team main race points specifically
   totalPoints: number;
+  sprintTotalPoints?: number;
   wins: number;
   podiums: number;
   gap: string;

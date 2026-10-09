@@ -309,7 +309,12 @@ export const DriverStandingsTable: React.FC<DriverStandingsTableProps> = ({
                   className="py-3 px-2 text-center font-mono-numbers font-medium whitespace-nowrap"
                   title={`${stage.trackName} (${stage.status})`}
                 >
-                  <div className="text-[10px] text-slate-500">R{stage.roundNumber}</div>
+                  <div className="text-[10px] text-slate-400 font-bold flex items-center justify-center gap-0.5">
+                    <span>R{stage.roundNumber}</span>
+                    {stage.hasSprint && (
+                      <span className="text-amber-400 font-bold" title="Etapa com Corrida Sprint">⚡</span>
+                    )}
+                  </div>
                   <div className="flex justify-center mt-0.5">
                     <CountryFlag flag={stage.trackFlag} country={stage.trackCountry} size="xs" />
                   </div>
@@ -410,7 +415,9 @@ export const DriverStandingsTable: React.FC<DriverStandingsTableProps> = ({
                     {/* Stage points columns */}
                     {activeChampionship.stages.map((stage) => {
                       const pts = driver.roundPoints[stage.roundNumber];
-                      const isCompleted = stage.status === 'Concluída';
+                      const sprintPts = driver.roundSprintPoints?.[stage.roundNumber] || 0;
+                      const hasSprintDone = Boolean(stage.hasSprint && stage.sprintResults && stage.sprintResults.length > 0);
+                      const isCompleted = stage.status === 'Concluída' || hasSprintDone;
 
                       return (
                         <td
@@ -419,19 +426,27 @@ export const DriverStandingsTable: React.FC<DriverStandingsTableProps> = ({
                         >
                           {isCompleted ? (
                             pts !== undefined ? (
-                              <span
-                                className={`font-semibold ${
-                                  pts >= 25
-                                    ? 'text-amber-400 font-bold'
-                                    : pts >= 15
-                                    ? 'text-emerald-400'
-                                    : pts > 0
-                                    ? 'text-slate-200'
-                                    : 'text-slate-500'
-                                }`}
-                              >
-                                {pts}
-                              </span>
+                              <div className="inline-flex flex-col items-center">
+                                <span
+                                  className={`font-semibold ${
+                                    pts >= 25
+                                      ? 'text-amber-400 font-bold'
+                                      : pts >= 15
+                                      ? 'text-emerald-400'
+                                      : pts > 0
+                                      ? 'text-slate-200'
+                                      : 'text-slate-500'
+                                  }`}
+                                  title={sprintPts > 0 ? `Total: ${pts} pts (Sprint: +${sprintPts} pts)` : `${pts} pts`}
+                                >
+                                  {pts}
+                                </span>
+                                {sprintPts > 0 && (
+                                  <span className="text-[9px] text-amber-400/90 font-mono font-medium leading-none" title={`+${sprintPts} pts na Sprint`}>
+                                    ⚡+{sprintPts}
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-slate-600">-</span>
                             )

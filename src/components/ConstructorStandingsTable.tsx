@@ -235,7 +235,12 @@ export const ConstructorStandingsTable: React.FC = () => {
                   scope="col"
                   className="py-3 px-2 text-center font-mono-numbers font-medium whitespace-nowrap"
                 >
-                  <div className="text-[10px] text-slate-500">R{stage.roundNumber}</div>
+                  <div className="text-[10px] text-slate-400 font-bold flex items-center justify-center gap-0.5">
+                    <span>R{stage.roundNumber}</span>
+                    {stage.hasSprint && (
+                      <span className="text-amber-400 font-bold" title="Etapa com Corrida Sprint">⚡</span>
+                    )}
+                  </div>
                   <div className="flex justify-center mt-0.5">
                     <CountryFlag flag={stage.trackFlag} country={stage.trackCountry} size="xs" />
                   </div>
@@ -313,13 +318,27 @@ export const ConstructorStandingsTable: React.FC = () => {
 
                   {activeChampionship.stages.map((stage) => {
                     const pts = team.roundPoints[stage.roundNumber];
-                    const isCompleted = stage.status === 'Concluída';
+                    const sprintPts = team.roundSprintPoints?.[stage.roundNumber] || 0;
+                    const hasSprintDone = Boolean(stage.hasSprint && stage.sprintResults && stage.sprintResults.length > 0);
+                    const isCompleted = stage.status === 'Concluída' || hasSprintDone;
 
                     return (
                       <td key={stage.id} className="py-3 px-2 text-center text-xs tabular-nums">
                         {isCompleted ? (
                           pts !== undefined ? (
-                            <span className="font-semibold text-white">{pts}</span>
+                            <div className="inline-flex flex-col items-center">
+                              <span
+                                className="font-semibold text-white"
+                                title={sprintPts > 0 ? `Total equipe: ${pts} pts (Sprint regulares: +${sprintPts} pts)` : `${pts} pts`}
+                              >
+                                {pts}
+                              </span>
+                              {sprintPts > 0 && (
+                                <span className="text-[9px] text-amber-400/90 font-mono font-medium leading-none" title={`+${sprintPts} pts regulares na Sprint`}>
+                                  ⚡+{sprintPts}
+                                </span>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-slate-600">0</span>
                           )

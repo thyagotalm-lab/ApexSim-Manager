@@ -35,7 +35,8 @@ const MainAppContent: React.FC = () => {
   // Modals state
   const [isAdminsModalOpen, setIsAdminsModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [selectedStageForResults, setSelectedStageForResults] = useState<StageRound | null>(null);
+  const [resultsModalConfig, setResultsModalConfig] = useState<{ stage: StageRound; raceType?: 'main' | 'sprint' } | null>(null);
+  const selectedStageForResults = resultsModalConfig?.stage || null;
   const [selectedStageForEdit, setSelectedStageForEdit] = useState<StageRound | null>(null);
   const [isStageEditorOpen, setIsStageEditorOpen] = useState(false);
 
@@ -80,7 +81,7 @@ const MainAppContent: React.FC = () => {
         {activeTab === 'overview' && (
           <ChampionshipOverview
             onNavigateToTab={(tab) => setActiveTab(tab)}
-            onOpenResultsModal={(stage) => setSelectedStageForResults(stage)}
+            onOpenResultsModal={(stage) => setResultsModalConfig({ stage, raceType: 'main' })}
           />
         )}
         {activeTab === 'standings-drivers' && (
@@ -92,7 +93,7 @@ const MainAppContent: React.FC = () => {
         {activeTab === 'standings-teams' && <ConstructorStandingsTable />}
         {activeTab === 'calendar' && (
           <CalendarStages
-            onOpenResultsModal={(stage) => setSelectedStageForResults(stage)}
+            onOpenResultsModal={(stage, raceType) => setResultsModalConfig({ stage, raceType: raceType || 'main' })}
             onOpenStageEditor={(stage) => {
               setSelectedStageForEdit(stage || null);
               setIsStageEditorOpen(true);
@@ -135,7 +136,7 @@ const MainAppContent: React.FC = () => {
               setSelectedStageForEdit(stage || null);
               setIsStageEditorOpen(true);
             }}
-            onOpenResultsModal={(stage) => setSelectedStageForResults(stage)}
+            onOpenResultsModal={(stage) => setResultsModalConfig({ stage, raceType: 'main' })}
             onNavigateToTab={(tab) => setActiveTab(tab)}
           />
         )}
@@ -147,10 +148,11 @@ const MainAppContent: React.FC = () => {
       {/* Modals */}
       <AuthModal />
 
-      {selectedStageForResults && (
+      {resultsModalConfig && (
         <RaceResultsModal
-          stage={selectedStageForResults}
-          onClose={() => setSelectedStageForResults(null)}
+          stage={resultsModalConfig.stage}
+          initialRaceType={resultsModalConfig.raceType || 'main'}
+          onClose={() => setResultsModalConfig(null)}
         />
       )}
 

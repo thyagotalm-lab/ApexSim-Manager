@@ -32,8 +32,10 @@ export function calculateDriverStandings(
   championship: Championship,
   users?: User[]
 ): DriverStanding[] {
-  const completedStages = championship.stages.filter(
-    (stage) => stage.status === 'Concluída' && stage.results && stage.results.length > 0
+  const activeStages = championship.stages.filter(
+    (stage) =>
+      (stage.results && stage.results.length > 0) ||
+      (stage.hasSprint && stage.sprintResults && stage.sprintResults.length > 0)
   );
 
   const driversMap = new Map<string, {
@@ -43,7 +45,10 @@ export function calculateDriverStandings(
     carModel: string;
     number: number;
     roundPoints: Record<number, number>;
+    roundSprintPoints: Record<number, number>;
+    roundMainPoints: Record<number, number>;
     totalPoints: number;
+    sprintTotalPoints: number;
     wins: number;
     podiums: number;
     poles: number;
@@ -66,7 +71,10 @@ export function calculateDriverStandings(
         carModel: reg.carModel,
         number: reg.carNumber,
         roundPoints: {},
+        roundSprintPoints: {},
+        roundMainPoints: {},
         totalPoints: 0,
+        sprintTotalPoints: 0,
         wins: 0,
         podiums: 0,
         poles: 0,
@@ -77,67 +85,120 @@ export function calculateDriverStandings(
       });
     });
 
-  // Process all completed stages
-  completedStages.forEach((stage) => {
-    stage.results?.forEach((result: RaceResultItem) => {
-      const reg = championship.registrations.find((r) => r.userId === result.driverId);
-      const isReserve =
-        Boolean(result.isReserve) ||
-        reg?.status === 'RESERVA' ||
-        Boolean(reg?.isReserve) ||
-        isReserveDriverOrTeam(result.teamName) ||
-        isReserveDriverOrTeam(reg?.teamName);
+  // Helper to get or initialize driver in driversMap
+  const getOrCreateDriver = (
+    driverId: string,
+    fallbackName: string,
+    teamName: string,
+    carModel: string,
+    number: number,
+    isReserve: boolean,
+    userEmail?: string
+  ) => {
+    const canonicalName = resolveCanonicalDriverName(driverId, fallbackName, userEmail, users);
+    let driver = driversMap.get(driverId);
+    if (!driver) {
+      driver = {
+        driverId,
+        driverName: canonicalName,
+        teamName: isReserve ? 'Reserva' : teamName,
+        carModel,
+        number,
+        roundPoints: {},
+        roundSprintPoints: {},
+        roundMainPoints: {},
+        totalPoints: 0,
+        sprintTotalPoints: 0,
+        wins: 0,
+        podiums: 0,
+        poles: 0,
+        fastestLaps: 0,
+        dnfs: 0,
+        bestFinish: 999,
+        isReserve,
+      };
+      driversMap.set(driverId, driver);
+    } else {
+      driver.driverName = canonicalName;
+      if (isReserve) {
+        driver.isReserve = true;
+        driver.teamName = 'Reserva';
+      }
+    }
+    return driver;
+  };
 
-      const canonicalName = resolveCanonicalDriverName(
-        result.driverId,
-        reg?.userName || result.driverName,
-        reg?.userEmail,
-        users
-      );
+  // Process all active stages with results or sprint results
+  activeStages.forEach((stage) => {
+    // 1. Process Main Race Results
+    if (stage.results && stage.results.length > 0) {
+      stage.results.forEach((result: RaceResultItem) => {
+        const reg = championship.registrations.find((r) => r.userId === result.driverId);
+        const isReserve =
+          Boolean(result.isReserve) ||
+          reg?.status === 'RESERVA' ||
+          Boolean(reg?.isReserve) ||
+          isReserveDriverOrTeam(result.teamName) ||
+          isReserveDriverOrTeam(reg?.teamName);
 
-      let driver = driversMap.get(result.driverId);
-      if (!driver) {
-        driver = {
-          driverId: result.driverId,
-          driverName: canonicalName,
-          teamName: isReserve ? 'Reserva' : result.teamName,
-          carModel: result.carModel,
-          number: result.number,
-          roundPoints: {},
-          totalPoints: 0,
-          wins: 0,
-          podiums: 0,
-          poles: 0,
-          fastestLaps: 0,
-          dnfs: 0,
-          bestFinish: 999,
+        const driver = getOrCreateDriver(
+          result.driverId,
+          reg?.userName || result.driverName,
+          result.teamName,
+          result.carModel,
+          result.number,
           isReserve,
-        };
-        driversMap.set(result.driverId, driver);
-      } else {
-        driver.driverName = canonicalName;
-        if (isReserve) {
-          driver.isReserve = true;
-          driver.teamName = 'Reserva';
+          reg?.userEmail
+        );
+
+        // Record main race stage points
+        const points = result.pointsAwarded || 0;
+        driver.roundMainPoints[stage.roundNumber] = (driver.roundMainPoints[stage.roundNumber] || 0) + points;
+        driver.roundPoints[stage.roundNumber] = (driver.roundPoints[stage.roundNumber] || 0) + points;
+        driver.totalPoints += points;
+
+        if (result.status === 'FINISHED') {
+          if (result.finishPosition === 1) driver.wins += 1;
+          if (result.finishPosition <= 3) driver.podiums += 1;
+          if (result.finishPosition < driver.bestFinish) driver.bestFinish = result.finishPosition;
+        } else if (result.status === 'DNF' || result.status === 'DSQ') {
+          driver.dnfs += 1;
         }
-      }
 
-      // Record stage points
-      const points = result.pointsAwarded || 0;
-      driver.roundPoints[stage.roundNumber] = points;
-      driver.totalPoints += points;
+        if (result.hasPole) driver.poles += 1;
+        if (result.hasFastestLap) driver.fastestLaps += 1;
+      });
+    }
 
-      if (result.status === 'FINISHED') {
-        if (result.finishPosition === 1) driver.wins += 1;
-        if (result.finishPosition <= 3) driver.podiums += 1;
-        if (result.finishPosition < driver.bestFinish) driver.bestFinish = result.finishPosition;
-      } else if (result.status === 'DNF' || result.status === 'DSQ') {
-        driver.dnfs += 1;
-      }
+    // 2. Process Sprint Race Results (Reserve drivers also score for driver championship)
+    if (stage.hasSprint && stage.sprintResults && stage.sprintResults.length > 0) {
+      stage.sprintResults.forEach((sprintResult: RaceResultItem) => {
+        const reg = championship.registrations.find((r) => r.userId === sprintResult.driverId);
+        const isReserve =
+          Boolean(sprintResult.isReserve) ||
+          reg?.status === 'RESERVA' ||
+          Boolean(reg?.isReserve) ||
+          isReserveDriverOrTeam(sprintResult.teamName) ||
+          isReserveDriverOrTeam(reg?.teamName);
 
-      if (result.hasPole) driver.poles += 1;
-      if (result.hasFastestLap) driver.fastestLaps += 1;
-    });
+        const driver = getOrCreateDriver(
+          sprintResult.driverId,
+          reg?.userName || sprintResult.driverName,
+          sprintResult.teamName,
+          sprintResult.carModel,
+          sprintResult.number,
+          isReserve,
+          reg?.userEmail
+        );
+
+        // Record sprint stage points
+        const points = sprintResult.pointsAwarded || 0;
+        driver.roundSprintPoints[stage.roundNumber] = (driver.roundSprintPoints[stage.roundNumber] || 0) + points;
+        driver.roundPoints[stage.roundNumber] = (driver.roundPoints[stage.roundNumber] || 0) + points;
+        driver.totalPoints += points;
+        driver.sprintTotalPoints += points;
+      });
+    }
   });
 
   const standingsList = Array.from(driversMap.values());
@@ -160,7 +221,10 @@ export function calculateDriverStandings(
     carModel: driver.carModel,
     number: driver.number,
     roundPoints: driver.roundPoints,
+    roundSprintPoints: driver.roundSprintPoints,
+    roundMainPoints: driver.roundMainPoints,
     totalPoints: driver.totalPoints,
+    sprintTotalPoints: driver.sprintTotalPoints,
     wins: driver.wins,
     podiums: driver.podiums,
     poles: driver.poles,
@@ -175,8 +239,10 @@ export function calculateConstructorStandings(
   championship: Championship,
   users?: User[]
 ): ConstructorStanding[] {
-  const completedStages = championship.stages.filter(
-    (stage) => stage.status === 'Concluída' && stage.results && stage.results.length > 0
+  const activeStages = championship.stages.filter(
+    (stage) =>
+      (stage.results && stage.results.length > 0) ||
+      (stage.hasSprint && stage.sprintResults && stage.sprintResults.length > 0)
   );
 
   const teamMap = new Map<string, {
@@ -184,7 +250,10 @@ export function calculateConstructorStandings(
     carBrand: string;
     drivers: Set<string>;
     roundPoints: Record<number, number>;
+    roundSprintPoints: Record<number, number>;
+    roundMainPoints: Record<number, number>;
     totalPoints: number;
+    sprintTotalPoints: number;
     wins: number;
     podiums: number;
   }>();
@@ -200,7 +269,10 @@ export function calculateConstructorStandings(
           carBrand: reg.carModel.split(' ')[0] || 'GT',
           drivers: new Set<string>(),
           roundPoints: {},
+          roundSprintPoints: {},
+          roundMainPoints: {},
           totalPoints: 0,
+          sprintTotalPoints: 0,
           wins: 0,
           podiums: 0,
         };
@@ -210,53 +282,108 @@ export function calculateConstructorStandings(
       team.drivers.add(canonicalName);
     });
 
-  // Aggregate points from completed stages
-  // NOTE: Reserve drivers score ONLY for the Driver Standings, NEVER for Constructor Standings
-  completedStages.forEach((stage) => {
-    stage.results?.forEach((result: RaceResultItem) => {
-      const reg = championship.registrations.find((r) => r.userId === result.driverId);
-      const isReserveDriver =
-        Boolean(result.isReserve) ||
-        reg?.status === 'RESERVA' ||
-        Boolean(reg?.isReserve) ||
-        isReserveDriverOrTeam(result.teamName) ||
-        isReserveDriverOrTeam(reg?.teamName);
+  // Aggregate points from active stages
+  // NOTE: Reserve drivers score ONLY for the Driver Standings, NEVER for Constructor Standings (in both Main Race and Sprint)
+  activeStages.forEach((stage) => {
+    // 1. Main race points for constructors
+    if (stage.results && stage.results.length > 0) {
+      stage.results.forEach((result: RaceResultItem) => {
+        const reg = championship.registrations.find((r) => r.userId === result.driverId);
+        const isReserveDriver =
+          Boolean(result.isReserve) ||
+          reg?.status === 'RESERVA' ||
+          Boolean(reg?.isReserve) ||
+          isReserveDriverOrTeam(result.teamName) ||
+          isReserveDriverOrTeam(reg?.teamName);
 
-      // If driver is a reserve, strictly skip counting points for constructor standings
-      if (isReserveDriver) {
-        return;
-      }
+        // If driver is a reserve, strictly skip counting points for constructor standings
+        if (isReserveDriver) {
+          return;
+        }
 
-      let team = teamMap.get(result.teamName);
-      if (!team) {
-        team = {
-          teamName: result.teamName,
-          carBrand: result.carModel.split(' ')[0] || 'GT',
-          drivers: new Set<string>(),
-          roundPoints: {},
-          totalPoints: 0,
-          wins: 0,
-          podiums: 0,
-        };
-        teamMap.set(result.teamName, team);
-      }
+        let team = teamMap.get(result.teamName);
+        if (!team) {
+          team = {
+            teamName: result.teamName,
+            carBrand: result.carModel.split(' ')[0] || 'GT',
+            drivers: new Set<string>(),
+            roundPoints: {},
+            roundSprintPoints: {},
+            roundMainPoints: {},
+            totalPoints: 0,
+            sprintTotalPoints: 0,
+            wins: 0,
+            podiums: 0,
+          };
+          teamMap.set(result.teamName, team);
+        }
 
-      const canonicalName = resolveCanonicalDriverName(
-        result.driverId,
-        reg?.userName || result.driverName,
-        reg?.userEmail,
-        users
-      );
-      team.drivers.add(canonicalName);
-      const points = result.pointsAwarded || 0;
-      team.roundPoints[stage.roundNumber] = (team.roundPoints[stage.roundNumber] || 0) + points;
-      team.totalPoints += points;
+        const canonicalName = resolveCanonicalDriverName(
+          result.driverId,
+          reg?.userName || result.driverName,
+          reg?.userEmail,
+          users
+        );
+        team.drivers.add(canonicalName);
+        const points = result.pointsAwarded || 0;
+        team.roundMainPoints[stage.roundNumber] = (team.roundMainPoints[stage.roundNumber] || 0) + points;
+        team.roundPoints[stage.roundNumber] = (team.roundPoints[stage.roundNumber] || 0) + points;
+        team.totalPoints += points;
 
-      if (result.status === 'FINISHED') {
-        if (result.finishPosition === 1) team.wins += 1;
-        if (result.finishPosition <= 3) team.podiums += 1;
-      }
-    });
+        if (result.status === 'FINISHED') {
+          if (result.finishPosition === 1) team.wins += 1;
+          if (result.finishPosition <= 3) team.podiums += 1;
+        }
+      });
+    }
+
+    // 2. Sprint race points for constructors (Strictly skipping reserve drivers)
+    if (stage.hasSprint && stage.sprintResults && stage.sprintResults.length > 0) {
+      stage.sprintResults.forEach((sprintResult: RaceResultItem) => {
+        const reg = championship.registrations.find((r) => r.userId === sprintResult.driverId);
+        const isReserveDriver =
+          Boolean(sprintResult.isReserve) ||
+          reg?.status === 'RESERVA' ||
+          Boolean(reg?.isReserve) ||
+          isReserveDriverOrTeam(sprintResult.teamName) ||
+          isReserveDriverOrTeam(reg?.teamName);
+
+        // If driver is a reserve, strictly skip counting sprint points for constructor standings
+        if (isReserveDriver) {
+          return;
+        }
+
+        let team = teamMap.get(sprintResult.teamName);
+        if (!team) {
+          team = {
+            teamName: sprintResult.teamName,
+            carBrand: sprintResult.carModel.split(' ')[0] || 'GT',
+            drivers: new Set<string>(),
+            roundPoints: {},
+            roundSprintPoints: {},
+            roundMainPoints: {},
+            totalPoints: 0,
+            sprintTotalPoints: 0,
+            wins: 0,
+            podiums: 0,
+          };
+          teamMap.set(sprintResult.teamName, team);
+        }
+
+        const canonicalName = resolveCanonicalDriverName(
+          sprintResult.driverId,
+          reg?.userName || sprintResult.driverName,
+          reg?.userEmail,
+          users
+        );
+        team.drivers.add(canonicalName);
+        const points = sprintResult.pointsAwarded || 0;
+        team.roundSprintPoints[stage.roundNumber] = (team.roundSprintPoints[stage.roundNumber] || 0) + points;
+        team.roundPoints[stage.roundNumber] = (team.roundPoints[stage.roundNumber] || 0) + points;
+        team.totalPoints += points;
+        team.sprintTotalPoints += points;
+      });
+    }
   });
 
   const standingsList = Array.from(teamMap.values()).filter((t) => !isReserveDriverOrTeam(t.teamName));
@@ -275,7 +402,10 @@ export function calculateConstructorStandings(
     carBrand: team.carBrand,
     driverNames: Array.from(team.drivers),
     roundPoints: team.roundPoints,
+    roundSprintPoints: team.roundSprintPoints,
+    roundMainPoints: team.roundMainPoints,
     totalPoints: team.totalPoints,
+    sprintTotalPoints: team.sprintTotalPoints,
     wins: team.wins,
     podiums: team.podiums,
     gap: index === 0 ? '-' : `-${leaderPoints - team.totalPoints} pts`,

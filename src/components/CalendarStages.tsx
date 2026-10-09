@@ -8,7 +8,7 @@ import { SubmitProtestModal } from './SubmitProtestModal';
 import { StewardsProtestsModal } from './StewardsProtestsModal';
 
 interface CalendarStagesProps {
-  onOpenResultsModal: (stage: StageRound) => void;
+  onOpenResultsModal: (stage: StageRound, raceType?: 'main' | 'sprint') => void;
   onOpenStageEditor: (stage?: StageRound) => void;
 }
 
@@ -172,6 +172,8 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
         ) : (
           activeChampionship.stages.map((stage) => {
             const winner = stage.results?.find((r) => r.finishPosition === 1 && r.status === 'FINISHED');
+            const sprintWinner = stage.sprintResults?.find((r) => r.finishPosition === 1 && r.status === 'FINISHED');
+            const hasSprintResults = Boolean(stage.sprintResults && stage.sprintResults.length > 0);
             const isCompleted = stage.status === 'Concluída';
 
             return (
@@ -249,20 +251,37 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
 
                   {/* Right: Quick results overview & Admin action buttons */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 self-end lg:self-center">
-                    {isCompleted && winner && (
-                      <div className="bg-slate-950/90 border border-slate-800 p-2.5 rounded-lg text-xs min-w-[200px] border-l-2 border-l-amber-400 shadow-sm">
-                        <div className="flex items-center gap-1.5 text-amber-400 font-semibold mb-1">
-                          <Award className="w-3.5 h-3.5" />
-                          <span>Vencedor: {users.find((u) => u.id === winner.driverId)?.name || winner.driverName}</span>
-                        </div>
-                        <div className="text-[11px] text-slate-400 flex items-center justify-between">
-                          <span>Equipe: <strong className="text-slate-300 font-medium">{winner.teamName}</strong></span>
-                          <span className="text-red-400 font-mono font-bold">#{winner.number}</span>
-                        </div>
-                        {stage.fastestLapTime && (
-                          <div className="text-[10px] text-purple-400 mt-1 font-mono tabular-nums font-semibold flex items-center gap-1 pt-1 border-t border-slate-800/50">
-                            <Zap className="w-3 h-3 text-purple-400" />
-                            <span>Volta Mais Rápida: {stage.fastestLapTime}</span>
+                    {/* Race & Sprint Winners Card */}
+                    {((isCompleted && winner) || (stage.hasSprint && sprintWinner)) && (
+                      <div className="bg-slate-950/90 border border-slate-800 p-2.5 rounded-lg text-xs min-w-[210px] border-l-2 border-l-amber-400 shadow-sm space-y-1.5">
+                        {isCompleted && winner && (
+                          <div>
+                            <div className="flex items-center gap-1.5 text-amber-400 font-semibold mb-0.5">
+                              <Award className="w-3.5 h-3.5" />
+                              <span>Vencedor: {users.find((u) => u.id === winner.driverId)?.name || winner.driverName}</span>
+                            </div>
+                            <div className="text-[11px] text-slate-400 flex items-center justify-between">
+                              <span>Equipe: <strong className="text-slate-300 font-medium">{winner.teamName}</strong></span>
+                              <span className="text-red-400 font-mono font-bold">#{winner.number}</span>
+                            </div>
+                            {stage.fastestLapTime && (
+                              <div className="text-[10px] text-purple-400 mt-1 font-mono tabular-nums font-semibold flex items-center gap-1 pt-1 border-t border-slate-800/50">
+                                <Zap className="w-3 h-3 text-purple-400" />
+                                <span>Volta Rápida: {stage.fastestLapTime}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {stage.hasSprint && sprintWinner && (
+                          <div className={isCompleted && winner ? 'pt-1.5 border-t border-slate-800/60' : ''}>
+                            <div className="flex items-center gap-1.5 text-amber-300 font-semibold text-[11px]">
+                              <Zap className="w-3 h-3 text-amber-400" />
+                              <span>Venc. Sprint: {users.find((u) => u.id === sprintWinner.driverId)?.name || sprintWinner.driverName}</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400 flex items-center justify-between mt-0.5">
+                              <span>{sprintWinner.teamName}</span>
+                              <span className="text-amber-400 font-mono font-bold">#{sprintWinner.number}</span>
+                            </div>
                           </div>
                         )}
                       </div>
@@ -280,12 +299,23 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
                           )}
 
                           <button
-                            onClick={() => onOpenResultsModal(stage)}
+                            onClick={() => onOpenResultsModal(stage, 'main')}
                             className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-colors flex items-center gap-1 cursor-pointer"
                           >
                             <span>Resultados & DotD</span>
                             <ChevronRight className="w-3.5 h-3.5" />
                           </button>
+
+                          {stage.hasSprint && hasSprintResults && (
+                            <button
+                              onClick={() => onOpenResultsModal(stage, 'sprint')}
+                              className="px-3 py-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900/80 border border-amber-800/80 text-amber-200 text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                              title="Visualizar classificação da Corrida Sprint"
+                            >
+                              <Zap className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Ver Sprint</span>
+                            </button>
+                          )}
 
                           <button
                             onClick={() => setProtestStage(stage)}
@@ -298,13 +328,38 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
                         </>
                       )}
 
+                      {/* If race is not completed but sprint has results, viewer can view sprint results */}
+                      {!isCompleted && stage.hasSprint && hasSprintResults && (
+                        <button
+                          onClick={() => onOpenResultsModal(stage, 'sprint')}
+                          className="px-3 py-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900/80 border border-amber-800/80 text-amber-200 text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Visualizar classificação da Corrida Sprint"
+                        >
+                          <Zap className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Ver Sprint</span>
+                        </button>
+                      )}
+
                       {/* Admin Actions */}
                       {isAdmin && (
                         <>
+                          {/* Dedicated Sprint Launch Button when stage has sprint */}
+                          {stage.hasSprint && (
+                            <button
+                              onClick={() => onOpenResultsModal(stage, 'sprint')}
+                              className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer border border-amber-400"
+                              title="Lançar ou homologar resultados específicos da Corrida Sprint seguindo a pontuação da liga"
+                            >
+                              <Zap className="w-3.5 h-3.5 fill-current" />
+                              <span>{hasSprintResults ? 'Editar Sprint' : 'Lançar Sprint'}</span>
+                            </button>
+                          )}
+
+                          {/* Main Race Launch Button */}
                           <button
-                            onClick={() => onOpenResultsModal(stage)}
+                            onClick={() => onOpenResultsModal(stage, 'main')}
                             className="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
-                            title="Lançar ou editar classificação da corrida"
+                            title="Lançar ou editar classificação da corrida principal"
                           >
                             <Award className="w-3.5 h-3.5" />
                             <span>{isCompleted ? 'Editar Resultados' : 'Lançar Resultados'}</span>

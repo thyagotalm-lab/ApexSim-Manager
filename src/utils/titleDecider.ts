@@ -79,8 +79,12 @@ export function calculateTitleMathematics(
 
   // Sum points available across all remaining rounds (accounting for sprint rounds if any)
   let totalPointsRemaining = 0;
+  const sprintMaxP1 = scoringRule.sprintPositions?.[0] ?? 8;
   remainingStages.forEach((stage) => {
-    const sprintExtra = stage.hasSprint ? 8 : 0;
+    // If stage has sprint and sprint results are not yet completed, add max sprint points
+    const sprintExtra = stage.hasSprint && (!stage.sprintResults || stage.sprintResults.length === 0)
+      ? sprintMaxP1
+      : 0;
     totalPointsRemaining += maxPointsPerRound + sprintExtra;
   });
 
@@ -245,6 +249,8 @@ export function simulateDriverScenario(
     });
   });
 
+  const sprintScoring = championship.scoringRule?.sprintPositions || [8, 7, 6, 5, 4, 3, 2, 1];
+
   // Calculate points added for target driver
   let targetAdded = 0;
   remainingStages.forEach((stage) => {
@@ -253,7 +259,9 @@ export function simulateDriverScenario(
       const posPts = scoring[sim.finishPos - 1] || 0;
       const polePts = sim.hasPole ? poleBonus : 0;
       const flPts = sim.hasFastestLap ? flBonus : 0;
-      const sprintPts = stage.hasSprint && sim.finishPos <= 8 ? (9 - sim.finishPos) : 0;
+      const sprintPts = stage.hasSprint && (!stage.sprintResults || stage.sprintResults.length === 0) && sim.finishPos <= sprintScoring.length
+        ? (sprintScoring[sim.finishPos - 1] || 0)
+        : 0;
       targetAdded += posPts + polePts + flPts + sprintPts;
     }
   });
@@ -272,7 +280,9 @@ export function simulateDriverScenario(
         const posPts = scoring[sim.finishPos - 1] || 0;
         const polePts = sim.hasPole ? poleBonus : 0;
         const flPts = sim.hasFastestLap ? flBonus : 0;
-        const sprintPts = stage.hasSprint && sim.finishPos <= 8 ? (9 - sim.finishPos) : 0;
+        const sprintPts = stage.hasSprint && (!stage.sprintResults || stage.sprintResults.length === 0) && sim.finishPos <= sprintScoring.length
+          ? (sprintScoring[sim.finishPos - 1] || 0)
+          : 0;
         rivalAdded += posPts + polePts + flPts + sprintPts;
       }
     });

@@ -45,6 +45,13 @@ interface ChampionshipContextType {
     poleData?: { driverId: string; time: string },
     fastestLapData?: { driverId: string; time: string }
   ) => void;
+  recordSprintResults: (
+    championshipId: string,
+    stageId: string,
+    results: RaceResultItem[],
+    poleData?: { driverId: string; time: string },
+    fastestLapData?: { driverId: string; time: string }
+  ) => void;
   deleteChampionship: (championshipId: string) => void;
   submitProtest: (protestData: {
     stageId: string;
@@ -887,6 +894,61 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
     });
   };
 
+  const recordSprintResults = (
+    championshipId: string,
+    stageId: string,
+    results: RaceResultItem[],
+    poleData?: { driverId: string; time: string },
+    fastestLapData?: { driverId: string; time: string }
+  ) => {
+    mutateChampionship(championshipId, (c) => ({
+      ...c,
+      status: 'Em Andamento',
+      stages: c.stages.map((st) => {
+        if (st.id === stageId) {
+          return {
+            ...st,
+            sprintResults: results,
+            sprintPoleDriverId: poleData?.driverId,
+            sprintPoleTime: poleData?.time,
+            sprintFastestLapDriverId: fastestLapData?.driverId,
+            sprintFastestLapTime: fastestLapData?.time,
+          };
+        }
+        return st;
+      }),
+    }));
+
+    // Update stats for drivers participating in the sprint
+    results.forEach((res) => {
+      const driverUser = users.find((u) => u.id === res.driverId);
+      if (driverUser) {
+        const curRating = driverUser.stats.simRating || 3000;
+        let ratingDelta = 0;
+        if (res.status === 'FINISHED') {
+          if (res.finishPosition === 1) ratingDelta = 20;
+          else if (res.finishPosition === 2) ratingDelta = 14;
+          else if (res.finishPosition === 3) ratingDelta = 10;
+          else if (res.finishPosition <= 5) ratingDelta = 6;
+          else if (res.finishPosition <= 8) ratingDelta = 3;
+          else ratingDelta = -2;
+        } else {
+          ratingDelta = -8;
+        }
+        const newSimRating = Math.max(1000, curRating + ratingDelta);
+
+        updateUser({
+          ...driverUser,
+          stats: {
+            ...driverUser.stats,
+            points: driverUser.stats.points + (res.pointsAwarded || 0),
+            simRating: newSimRating,
+          },
+        });
+      }
+    });
+  };
+
   const deleteChampionship = (championshipId: string) => {
     setChampionships((prev) => {
       const remaining = prev.filter((c) => c.id !== championshipId);
@@ -1265,6 +1327,18 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
             return res;
           });
 
+          const updatedSprintResults = (stage.sprintResults || []).map((res) => {
+            if (res.driverId === cleanOldId || res.driverId === cleanNewId) {
+              stageChanged = true;
+              return {
+                ...res,
+                driverId: cleanNewId,
+                driverName: cleanNewName || res.driverName,
+              };
+            }
+            return res;
+          });
+
           let updatedPole = stage.poleDriverId;
           if (stage.poleDriverId === cleanOldId) {
             stageChanged = true;
@@ -1275,6 +1349,18 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
           if (stage.fastestLapDriverId === cleanOldId) {
             stageChanged = true;
             updatedFL = cleanNewId;
+          }
+
+          let updatedSprintPole = stage.sprintPoleDriverId;
+          if (stage.sprintPoleDriverId === cleanOldId) {
+            stageChanged = true;
+            updatedSprintPole = cleanNewId;
+          }
+
+          let updatedSprintFL = stage.sprintFastestLapDriverId;
+          if (stage.sprintFastestLapDriverId === cleanOldId) {
+            stageChanged = true;
+            updatedSprintFL = cleanNewId;
           }
 
           let updatedTrophies = stage.communityTrophies;
@@ -1298,12 +1384,47 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
             return {
               ...stage,
               results: updatedResults,
+              sprintResults: updatedSprintResults,
               poleDriverId: updatedPole,
               fastestLapDriverId: updatedFL,
+              sprintPoleDriverId: updatedSprintPole,
+              sprintFastestLapDriverId: updatedSprintFL,
               communityTrophies: updatedTrophies,
             };
           }
           return stage;
+        });
+
+        // 4. Protests plaintiff & defendant names
+        const updatedProtests = (champ.protests || []).map((p) => {
+          let pChanged = false;
+          let pClaimantId = p.plaintiffId;
+          let pClaimantName = p.plaintiffName;
+          let pAccusedId = p.defendantId;
+          let pAccusedName = p.defendantName;
+
+          if (p.plaintiffId === cleanOldId || p.plaintiffId === cleanNewId) {
+            pClaimantId = cleanNewId;
+            pClaimantName = cleanNewName || p.plaintiffName;
+            pChanged = true;
+          }
+          if (p.defendantId === cleanOldId || p.defendantId === cleanNewId) {
+            pAccusedId = cleanNewId;
+            pAccusedName = cleanNewName || p.defendantName;
+            pChanged = true;
+          }
+
+          if (pChanged) {
+            changed = true;
+            return {
+              ...p,
+              plaintiffId: pClaimantId,
+              plaintiffName: pClaimantName,
+              defendantId: pAccusedId,
+              defendantName: pAccusedName,
+            };
+          }
+          return p;
         });
 
         if (changed) {
@@ -1312,6 +1433,7 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
             registrations: updatedRegistrations,
             adminIds: updatedAdminIds,
             stages: updatedStages,
+            protests: updatedProtests,
           };
           saveChampionshipToCloud(updatedChamp).catch(() => {});
           return updatedChamp;
@@ -1365,6 +1487,7 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
         getUserChampionships,
         canUserJoinChampionship,
         recordRaceResults,
+        recordSprintResults,
         deleteChampionship,
         submitProtest,
         judgeProtest,

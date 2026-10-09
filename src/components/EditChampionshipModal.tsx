@@ -70,6 +70,9 @@ export const EditChampionshipModal: React.FC<EditChampionshipModalProps> = ({
   const [dropWorstRounds, setDropWorstRounds] = useState<number>(
     championship.scoringRule?.dropWorstRounds || 0
   );
+  const [sprintScoringPoints, setSprintScoringPoints] = useState<number[]>(
+    championship.scoringRule?.sprintPositions || [8, 7, 6, 5, 4, 3, 2, 1]
+  );
 
   const [activeTab, setActiveTab] = useState<'general' | 'scoring' | 'rules'>('general');
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -81,12 +84,16 @@ export const EditChampionshipModal: React.FC<EditChampionshipModalProps> = ({
     setScoringPreset(preset);
     if (preset === 'f1') {
       setScoringPoints([25, 18, 15, 12, 10, 8, 6, 4, 2, 1]);
+      setSprintScoringPoints([8, 7, 6, 5, 4, 3, 2, 1]);
     } else if (preset === 'f1_classic') {
       setScoringPoints([10, 6, 4, 3, 2, 1]);
+      setSprintScoringPoints([5, 4, 3, 2, 1]);
     } else if (preset === 'motogp') {
       setScoringPoints([25, 20, 16, 13, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+      setSprintScoringPoints([12, 9, 7, 6, 5, 4, 3, 2, 1]);
     } else if (preset === 'top20') {
       setScoringPoints([20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+      setSprintScoringPoints([10, 8, 6, 5, 4, 3, 2, 1]);
     }
   };
 
@@ -123,6 +130,7 @@ export const EditChampionshipModal: React.FC<EditChampionshipModalProps> = ({
           ? 'Top 20 com Pontuação'
           : `Sistema Personalizado (${scoringPoints.length} posições)`,
       positions: scoringPoints,
+      sprintPositions: sprintScoringPoints,
       poleBonus: hasPoleBonus ? poleBonusPoints : 0,
       fastestLapBonus: hasFastestLapBonus ? fastestLapBonusPoints : 0,
       dropWorstRounds,
@@ -557,6 +565,56 @@ export const EditChampionshipModal: React.FC<EditChampionshipModalProps> = ({
                       className="w-14 bg-slate-900 border border-slate-700 text-center py-1 rounded text-xs font-mono text-white"
                     />
                     <span className="text-xs text-slate-400">etapa(s)</span>
+                  </div>
+                </div>
+
+                {/* Sprint Scoring Configuration */}
+                <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-800/60 space-y-2 mt-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <span className="text-xs font-bold text-amber-300 block">
+                        Pontuação das Corridas Sprint (Quando ativadas)
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        Pontos distribuídos aos pilotos e construtores nas corridas Sprint oficiais.
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setSprintScoringPoints([8, 7, 6, 5, 4, 3, 2, 1])}
+                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-600/30 text-amber-200 border border-amber-600/50 cursor-pointer"
+                      >
+                        FIA F1 Top 8
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSprintScoringPoints([5, 4, 3, 2, 1])}
+                        className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer"
+                      >
+                        Top 5
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5 pt-1">
+                    {sprintScoringPoints.map((pts, idx) => (
+                      <div key={idx} className="bg-slate-950 border border-amber-900/50 rounded-lg p-1.5 text-center">
+                        <span className="text-[9px] text-amber-400 font-mono font-bold block">P{idx + 1}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={50}
+                          value={pts}
+                          onChange={(e) => {
+                            const copy = [...sprintScoringPoints];
+                            copy[idx] = Math.max(0, parseInt(e.target.value, 10) || 0);
+                            setSprintScoringPoints(copy);
+                          }}
+                          className="w-full bg-slate-900 text-white font-mono font-bold text-xs text-center rounded border border-slate-800 py-0.5 focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

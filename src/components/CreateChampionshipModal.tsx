@@ -132,6 +132,7 @@ export const CreateChampionshipModal: React.FC<CreateChampionshipModalProps> = (
   const [scoringPreset, setScoringPreset] = useState<'f1' | 'f1_classic' | 'motogp' | 'top20' | 'custom'>('f1');
   const [scoringPositionsCount, setScoringPositionsCount] = useState<number>(10);
   const [scoringPoints, setScoringPoints] = useState<number[]>([25, 18, 15, 12, 10, 8, 6, 4, 2, 1]);
+  const [sprintScoringPoints, setSprintScoringPoints] = useState<number[]>([8, 7, 6, 5, 4, 3, 2, 1]);
   
   // Extra points options
   const [hasPoleBonus, setHasPoleBonus] = useState<boolean>(true);
@@ -377,15 +378,19 @@ export const CreateChampionshipModal: React.FC<CreateChampionshipModalProps> = (
     if (preset === 'f1') {
       setScoringPositionsCount(10);
       setScoringPoints([25, 18, 15, 12, 10, 8, 6, 4, 2, 1]);
+      setSprintScoringPoints([8, 7, 6, 5, 4, 3, 2, 1]);
     } else if (preset === 'f1_classic') {
       setScoringPositionsCount(8);
       setScoringPoints([10, 8, 6, 5, 4, 3, 2, 1]);
+      setSprintScoringPoints([5, 4, 3, 2, 1]);
     } else if (preset === 'motogp') {
       setScoringPositionsCount(15);
       setScoringPoints([25, 20, 16, 13, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+      setSprintScoringPoints([12, 9, 7, 6, 5, 4, 3, 2, 1]);
     } else if (preset === 'top20') {
       setScoringPositionsCount(20);
       setScoringPoints([30, 25, 22, 19, 17, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]);
+      setSprintScoringPoints([10, 8, 6, 5, 4, 3, 2, 1]);
     }
   };
 
@@ -423,6 +428,7 @@ export const CreateChampionshipModal: React.FC<CreateChampionshipModalProps> = (
     const scoringRule: ScoringRule = {
       name: `Sistema Oficial (${scoringPoints.length} Posições)`,
       positions: scoringPoints,
+      sprintPositions: sprintScoringPoints,
       poleBonus: hasPoleBonus ? Number(poleBonusPoints) || 0 : 0,
       fastestLapBonus: hasFastestLapBonus ? Number(fastestLapBonusPoints) || 0 : 0,
       dropWorstRounds: 0,
@@ -860,6 +866,68 @@ export const CreateChampionshipModal: React.FC<CreateChampionshipModalProps> = (
                     </div>
                   )}
                 </div>
+              </div>
+            </div>
+
+            {/* Pontuação Oficial para Corridas Sprint */}
+            <div className="p-3.5 rounded-xl bg-amber-950/20 border border-amber-800/60 space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-400 shrink-0" />
+                  <div>
+                    <span className="text-xs font-bold text-amber-300 block">
+                      Pontuação para Corridas Sprint (Quando ativadas nas etapas)
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      Pilotos e equipes pontuam seguindo esta escala nas etapas com corrida Sprint.
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] text-slate-400">Modelos:</span>
+                  <button
+                    type="button"
+                    onClick={() => setSprintScoringPoints([8, 7, 6, 5, 4, 3, 2, 1])}
+                    className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-600/30 hover:bg-amber-600/50 text-amber-200 border border-amber-600/50 cursor-pointer"
+                  >
+                    FIA F1 Top 8
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSprintScoringPoints([5, 4, 3, 2, 1])}
+                    className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer"
+                  >
+                    Top 5
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSprintScoringPoints([12, 9, 7, 6, 5, 4, 3, 2, 1])}
+                    className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer"
+                  >
+                    MotoGP Top 9
+                  </button>
+                </div>
+              </div>
+
+              {/* Sprint Points row */}
+              <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5 pt-1">
+                {sprintScoringPoints.map((pts, idx) => (
+                  <div key={idx} className="bg-slate-950/80 border border-amber-900/50 rounded-lg p-1.5 text-center">
+                    <span className="text-[9px] text-amber-400 font-mono font-bold block">P{idx + 1}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={50}
+                      value={pts}
+                      onChange={(e) => {
+                        const copy = [...sprintScoringPoints];
+                        copy[idx] = Math.max(0, parseInt(e.target.value, 10) || 0);
+                        setSprintScoringPoints(copy);
+                      }}
+                      className="w-full bg-slate-900 text-white font-mono font-bold text-xs text-center rounded border border-slate-800 py-0.5 focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                ))}
               </div>
             </div>
           </div>

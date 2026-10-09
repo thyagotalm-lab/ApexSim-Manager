@@ -506,6 +506,23 @@ app.put('/api/users/:id', (req, res) => {
               });
             }
 
+            // 3a-2. Sprint Race Results in each stage
+            if (Array.isArray(stage.sprintResults)) {
+              stage.sprintResults.forEach((res: any) => {
+                if (
+                  res.driverId === id ||
+                  res.driverId === updatedId ||
+                  (oldName && res.driverName === oldName)
+                ) {
+                  res.driverId = updatedId;
+                  if (newName) {
+                    res.driverName = newName;
+                  }
+                  champModified = true;
+                }
+              });
+            }
+
             // 3b. Pole Position & Fastest Lap driver IDs
             if (stage.poleDriverId === id) {
               stage.poleDriverId = updatedId;
@@ -513,6 +530,14 @@ app.put('/api/users/:id', (req, res) => {
             }
             if (stage.fastestLapDriverId === id) {
               stage.fastestLapDriverId = updatedId;
+              champModified = true;
+            }
+            if (stage.sprintPoleDriverId === id) {
+              stage.sprintPoleDriverId = updatedId;
+              champModified = true;
+            }
+            if (stage.sprintFastestLapDriverId === id) {
+              stage.sprintFastestLapDriverId = updatedId;
               champModified = true;
             }
 
@@ -553,6 +578,30 @@ app.put('/api/users/:id', (req, res) => {
                   });
                 }
               });
+            }
+          });
+        }
+
+        // 4. Update root championship protests (RaceProtest[])
+        if (Array.isArray(champ.protests)) {
+          champ.protests.forEach((protest: any) => {
+            if (
+              protest.plaintiffId === id ||
+              protest.plaintiffId === updatedId ||
+              (oldName && protest.plaintiffName === oldName)
+            ) {
+              protest.plaintiffId = updatedId;
+              if (newName) protest.plaintiffName = newName;
+              champModified = true;
+            }
+            if (
+              protest.defendantId === id ||
+              protest.defendantId === updatedId ||
+              (oldName && protest.defendantName === oldName)
+            ) {
+              protest.defendantId = updatedId;
+              if (newName) protest.defendantName = newName;
+              champModified = true;
             }
           });
         }
