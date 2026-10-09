@@ -924,15 +924,38 @@ app.post('/api/notifications/clear', (req, res) => {
   res.json({ success: true });
 });
 
+// Health check endpoints for Cloudflare, Render, Uptime monitors
+app.get('/health', (req, res) => res.status(200).send('OK'));
+app.get('/api/health', (req, res) => res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() }));
+
 // Serve frontend with Vite middlewares in dev, or static files in production
 async function startServer() {
   if (fs.existsSync(path.resolve(__dirname, 'public'))) {
     app.use(express.static(path.resolve(__dirname, 'public')));
   }
-  const isProduction = process.env.NODE_ENV === 'production' || fs.existsSync(path.resolve(__dirname, 'dist', 'index.html'));
-  if (isProduction && fs.existsSync(path.resolve(__dirname, 'dist'))) {
+
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.RENDER === 'true';
+
+  // If running in production but dist wasn't pre-built, build it now to avoid running heavy Vite dev server on Render
+  if (isProduction && !fs.existsSync(path.resolve(__dirname, 'dist', 'index.html'))) {
+    console.log('[ApexSim] Production mode detected without pre-built dist folder. Building production client bundle...');
+    try {
+      const { build } = await import('vite');
+      await build();
+      console.log('[ApexSim] Production client build completed successfully.');
+    } catch (buildErr) {
+      console.error('[ApexSim] Warning: Failed to build client bundle on boot:', buildErr);
+    }
+  }
+
+  const hasDist = fs.existsSync(path.resolve(__dirname, 'dist', 'index.html'));
+
+  if (isProduction && hasDist) {
     app.use(express.static(path.resolve(__dirname, 'dist')));
-    app.get('*', (req, res) => {
+    app.get('*', (req, res, next) => {
+      if (req.originalUrl.startsWith('/api') || req.originalUrl === '/health') {
+        return next();
+      }
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
     });
   } else {
@@ -943,8 +966,8 @@ async function startServer() {
     });
     app.use(vite.middlewares);
     app.use('*', async (req, res, next) => {
-      // Don't intercept API routes
-      if (req.originalUrl.startsWith('/api')) {
+      // Don't intercept API routes or health check
+      if (req.originalUrl.startsWith('/api') || req.originalUrl === '/health') {
         return next();
       }
       try {
