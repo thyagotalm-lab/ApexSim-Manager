@@ -1,4 +1,5 @@
 import { Championship, ConstructorStanding, DriverStanding, RaceResultItem, User } from '../types';
+import { isDeletedUserAccount } from '../services/userService';
 
 export const isReserveDriverOrTeam = (nameOrTeam?: string): boolean => {
   if (!nameOrTeam) return false;
@@ -60,7 +61,7 @@ export function calculateDriverStandings(
 
   // Pre-seed from approved and reserve registrations so that enrolled drivers appear even if not yet scored
   championship.registrations
-    .filter((r) => r.status === 'APROVADO' || r.status === 'RESERVA' || r.isReserve)
+    .filter((r) => (r.status === 'APROVADO' || r.status === 'RESERVA' || r.isReserve) && !isDeletedUserAccount(r))
     .forEach((reg) => {
       const isReserve = reg.status === 'RESERVA' || Boolean(reg.isReserve) || isReserveDriverOrTeam(reg.teamName);
       const canonicalName = resolveCanonicalDriverName(reg.userId, reg.userName, reg.userEmail, users);
@@ -95,6 +96,11 @@ export function calculateDriverStandings(
     isReserve: boolean,
     userEmail?: string
   ) => {
+    if (
+      isDeletedUserAccount({ id: driverId, name: fallbackName, email: userEmail })
+    ) {
+      return null;
+    }
     const canonicalName = resolveCanonicalDriverName(driverId, fallbackName, userEmail, users);
     let driver = driversMap.get(driverId);
     if (!driver) {
@@ -151,6 +157,8 @@ export function calculateDriverStandings(
           reg?.userEmail
         );
 
+        if (!driver) return;
+
         // Record main race stage points
         const points = result.pointsAwarded || 0;
         driver.roundMainPoints[stage.roundNumber] = (driver.roundMainPoints[stage.roundNumber] || 0) + points;
@@ -190,6 +198,8 @@ export function calculateDriverStandings(
           isReserve,
           reg?.userEmail
         );
+
+        if (!driver) return;
 
         // Record sprint stage points
         const points = sprintResult.pointsAwarded || 0;
@@ -260,7 +270,7 @@ export function calculateConstructorStandings(
 
   // Seed from non-reserve approved registrations
   championship.registrations
-    .filter((r) => r.status === 'APROVADO' && !r.isReserve && !isReserveDriverOrTeam(r.teamName))
+    .filter((r) => r.status === 'APROVADO' && !r.isReserve && !isReserveDriverOrTeam(r.teamName) && !isDeletedUserAccount(r))
     .forEach((reg) => {
       let team = teamMap.get(reg.teamName);
       if (!team) {

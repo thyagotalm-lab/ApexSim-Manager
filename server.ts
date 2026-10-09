@@ -186,6 +186,7 @@ const filterRealUsersOnly = (usersList: any[]) => {
     if (
       deletedIdentifiers.has(id) ||
       deletedIdentifiers.has(email) ||
+      (name && deletedIdentifiers.has(name)) ||
       name === 'tyko moura' ||
       name === 'piloto de testes'
     ) {
@@ -227,20 +228,45 @@ const readUsersFromFile = (): any[] => {
     cleaned.unshift(THYAGO_ADMIN_USER);
   }
 
-  // Auto-sync any pilots registered in championships who don't have a user record yet
+  // Auto-sync any pilots registered in championships who don't have a user record yet, and purge deleted pilots from championships
   try {
     const deletedIdentifiers = readDeletedUserIdsAndEmails();
     const champs = readChampionshipsFromFile();
     let addedAny = false;
+    let champsCleaned = false;
     const existingIds = new Set(cleaned.map((u) => (u.id || '').toLowerCase().trim()));
     const existingEmails = new Set(cleaned.map((u) => (u.email || '').toLowerCase().trim()));
 
     champs.forEach((champ) => {
+      if (Array.isArray(champ.registrations)) {
+        const origLen = champ.registrations.length;
+        champ.registrations = champ.registrations.filter((reg: any) => {
+          const email = (reg.userEmail || '').toLowerCase().trim();
+          const id = (reg.userId || '').toLowerCase().trim();
+          const name = (reg.userName || '').toLowerCase().trim();
+          const isDeleted =
+            (id && deletedIdentifiers.has(id)) ||
+            (email && deletedIdentifiers.has(email)) ||
+            (name && deletedIdentifiers.has(name));
+          return !isDeleted;
+        });
+        if (champ.registrations.length !== origLen) {
+          champsCleaned = true;
+        }
+      }
+
       (champ.registrations || []).forEach((reg: any) => {
         const email = (reg.userEmail || '').toLowerCase().trim();
         const id = (reg.userId || '').toLowerCase().trim();
+        const name = (reg.userName || '').toLowerCase().trim();
         if (!email && !id) return;
-        if ((id && deletedIdentifiers.has(id)) || (email && deletedIdentifiers.has(email))) return;
+        if (
+          (id && deletedIdentifiers.has(id)) ||
+          (email && deletedIdentifiers.has(email)) ||
+          (name && deletedIdentifiers.has(name))
+        ) {
+          return;
+        }
 
         const alreadyExists = (id && existingIds.has(id)) || (email && existingEmails.has(email));
         if (!alreadyExists) {
@@ -283,6 +309,9 @@ const readUsersFromFile = (): any[] => {
       });
     });
 
+    if (champsCleaned) {
+      writeChampionshipsToFile(champs);
+    }
     if (addedAny) {
       writeUsersToFile(cleaned);
     }
@@ -306,10 +335,11 @@ const writeUsersToFile = (usersList: any[]) => {
   }
 };
 
-// API: Get all real registered users
+// API: Get all real registered users along with tombstone list of deleted identifiers
 app.get('/api/users', (req, res) => {
   const users = readUsersFromFile();
-  res.json({ success: true, users });
+  const deletedSet = readDeletedUserIdsAndEmails();
+  res.json({ success: true, users, deletedIds: Array.from(deletedSet) });
 });
 
 // API: Register or update a user in the persistent database
@@ -624,37 +654,108 @@ app.delete('/api/users/:id', (req, res) => {
   const users = readUsersFromFile();
   const target = users.find((u) => u.id === id);
 
-  if (target && target.email.toLowerCase().trim() === 'thyago.talm@gmail.com') {
+  const targetEmail = ((req.body && req.body.email) || (req.query && req.query.email) || target?.email || '').toString().toLowerCase().trim();
+  const targetName = ((req.body && req.body.name) || (req.query && req.query.name) || target?.name || '').toString().toLowerCase().trim();
+
+  if (targetEmail === 'thyago.talm@gmail.com' || id === 'user_thyago_talm') {
     return res.status(403).json({ success: false, error: 'Não é permitido excluir o usuário principal' });
   }
 
-  // Blacklist the old user ID so existing sessions are invalidated
+  // Blacklist the user ID, email and name so existing sessions and sync loops cannot revive this pilot
   addDeletedUserIdentifier(id);
-
-  // If email was previously in deleted list, remove it so the person is free to register fresh if desired
-  if (target?.email) {
-    removeDeletedUserIdentifier(target.email);
+  if (targetEmail) {
+    addDeletedUserIdentifier(targetEmail);
+  }
+  if (targetName) {
+    addDeletedUserIdentifier(targetName);
   }
 
   // 1. Remove from users.json
-  const remaining = users.filter((u) => u.id !== id);
+  const remaining = users.filter((u) => {
+    const uId = (u.id || '').toLowerCase().trim();
+    const uEmail = (u.email || '').toLowerCase().trim();
+    const uName = (u.name || '').toLowerCase().trim();
+    if (uId === id.toLowerCase().trim()) return false;
+    if (targetEmail && uEmail === targetEmail) return false;
+    if (targetName && uName === targetName) return false;
+    return true;
+  });
   writeUsersToFile(remaining);
 
   // 2. Clean from championships.json (remove registrations and admin memberships)
   try {
     const champs = readChampionshipsFromFile();
     let champModified = false;
+    const cleanId = id.toLowerCase().trim();
+
     champs.forEach((champ) => {
       const origLen = (champ.registrations || []).length;
-      champ.registrations = (champ.registrations || []).filter(
-        (r: any) => r.userId !== id && (!target?.email || r.userEmail?.toLowerCase().trim() !== target.email.toLowerCase().trim())
-      );
+      champ.registrations = (champ.registrations || []).filter((r: any) => {
+        const regId = (r.userId || '').toLowerCase().trim();
+        const regEmail = (r.userEmail || '').toLowerCase().trim();
+        const regName = (r.userName || '').toLowerCase().trim();
+        const matches =
+          (cleanId && regId === cleanId) ||
+          (targetEmail && regEmail === targetEmail) ||
+          (targetName && regName === targetName);
+        return !matches;
+      });
       if (champ.registrations.length !== origLen) {
         champModified = true;
       }
-      if (champ.adminIds && champ.adminIds.includes(id)) {
-        champ.adminIds = champ.adminIds.filter((aid: string) => aid !== id);
+      if (champ.adminIds && champ.adminIds.some((aid: string) => aid.toLowerCase().trim() === cleanId)) {
+        champ.adminIds = champ.adminIds.filter((aid: string) => aid.toLowerCase().trim() !== cleanId);
         champModified = true;
+      }
+
+      // Also clean results from stages
+      if (Array.isArray(champ.stages)) {
+        champ.stages.forEach((st: any) => {
+          if (Array.isArray(st.results)) {
+            const rLen = st.results.length;
+            st.results = st.results.filter((res: any) => {
+              const resId = (res.driverId || '').toLowerCase().trim();
+              const resEmail = (res.driverEmail || '').toLowerCase().trim();
+              const resName = (res.driverName || '').toLowerCase().trim();
+              const matches =
+                (cleanId && resId === cleanId) ||
+                (targetEmail && resEmail === targetEmail) ||
+                (targetName && resName === targetName);
+              return !matches;
+            });
+            if (st.results.length !== rLen) champModified = true;
+          }
+          if (Array.isArray(st.sprintResults)) {
+            const srLen = st.sprintResults.length;
+            st.sprintResults = st.sprintResults.filter((res: any) => {
+              const resId = (res.driverId || '').toLowerCase().trim();
+              const resEmail = (res.driverEmail || '').toLowerCase().trim();
+              const resName = (res.driverName || '').toLowerCase().trim();
+              const matches =
+                (cleanId && resId === cleanId) ||
+                (targetEmail && resEmail === targetEmail) ||
+                (targetName && resName === targetName);
+              return !matches;
+            });
+            if (st.sprintResults.length !== srLen) champModified = true;
+          }
+          if (st.poleDriverId && st.poleDriverId.toLowerCase().trim() === cleanId) {
+            delete st.poleDriverId;
+            champModified = true;
+          }
+          if (st.fastestLapDriverId && st.fastestLapDriverId.toLowerCase().trim() === cleanId) {
+            delete st.fastestLapDriverId;
+            champModified = true;
+          }
+          if (st.sprintPoleDriverId && st.sprintPoleDriverId.toLowerCase().trim() === cleanId) {
+            delete st.sprintPoleDriverId;
+            champModified = true;
+          }
+          if (st.sprintFastestLapDriverId && st.sprintFastestLapDriverId.toLowerCase().trim() === cleanId) {
+            delete st.sprintFastestLapDriverId;
+            champModified = true;
+          }
+        });
       }
     });
     if (champModified) {
@@ -680,6 +781,25 @@ app.delete('/api/users/:id', (req, res) => {
   res.json({ success: true, message: 'Usuário excluído permanentemente de todos os bancos de dados', users: remaining });
 });
 
+// Helper to filter out any deleted registrations from incoming championship
+const sanitizeChampDeletedRegistrations = (champ: any) => {
+  if (!champ) return champ;
+  const deletedSet = readDeletedUserIdsAndEmails();
+  if (Array.isArray(champ.registrations)) {
+    champ.registrations = champ.registrations.filter((reg: any) => {
+      const regId = (reg.userId || '').toLowerCase().trim();
+      const regEmail = (reg.userEmail || '').toLowerCase().trim();
+      const regName = (reg.userName || '').toLowerCase().trim();
+      const isDeleted =
+        (regId && deletedSet.has(regId)) ||
+        (regEmail && deletedSet.has(regEmail)) ||
+        (regName && deletedSet.has(regName));
+      return !isDeleted;
+    });
+  }
+  return champ;
+};
+
 // API: Get all championships
 app.get('/api/championships', (req, res) => {
   const deletedSet = new Set(readDeletedChampionshipIds());
@@ -689,7 +809,7 @@ app.get('/api/championships', (req, res) => {
 
 // API: Create or update a championship
 app.post('/api/championships', (req, res) => {
-  const champ = req.body;
+  const champ = sanitizeChampDeletedRegistrations(req.body);
   if (!champ || !champ.id) {
     return res.status(400).json({ success: false, error: 'Championship ID is required' });
   }
@@ -721,8 +841,9 @@ app.post('/api/championships/sync', (req, res) => {
   if (Array.isArray(incoming)) {
     incoming.forEach((c) => {
       if (c && c.id && !deletedSet.has(c.id)) {
+        const sanitized = sanitizeChampDeletedRegistrations(c);
         const existing = map.get(c.id);
-        map.set(c.id, { ...existing, ...c });
+        map.set(c.id, { ...existing, ...sanitized });
       }
     });
   }

@@ -429,7 +429,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('A conta do Administrador Master (thyago.talm@gmail.com) é protegida e não pode ser excluída.');
     }
 
-    const res = await deleteUserCompletely(userId, targetUser.email);
+    const res = await deleteUserCompletely(userId, targetUser.email, targetUser.name);
 
     // Immediately remove from current state
     setUsers((prev) => prev.filter((u) => u.id !== userId));

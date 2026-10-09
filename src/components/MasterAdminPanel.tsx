@@ -31,7 +31,7 @@ import { useChampionships } from '../context/ChampionshipContext';
 import { User } from '../types';
 import { getSimRatingTier } from '../utils/simRating';
 import { CountryFlag } from './CountryFlag';
-import { isFakeMockUser } from '../services/userService';
+import { isFakeMockUser, isDeletedUserAccount } from '../services/userService';
 
 interface MasterAdminPanelProps {
   onNavigateToTab?: (tab: any) => void;
@@ -39,7 +39,7 @@ interface MasterAdminPanelProps {
 
 export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateToTab }) => {
   const { currentUser, users, syncUsers, deleteUserAccountPermanently, adminUpdatePilotProfile } = useAuth();
-  const { championships, propagatePilotProfileUpdate, reloadChampionships } = useChampionships();
+  const { championships, propagatePilotProfileUpdate, purgePilotFromAllChampionships, reloadChampionships } = useChampionships();
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,7 +84,7 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
       if (res.ok) {
         const data = await res.json();
         if (data && Array.isArray(data.users)) {
-          setBackendUsers(data.users);
+          setBackendUsers(data.users.filter((u: User) => !isFakeMockUser(u) && !isDeletedUserAccount(u)));
         }
       }
     } catch (e) {
@@ -104,7 +104,7 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
 
     // 1. Add all users from Backend API (/api/users)
     backendUsers.forEach((u) => {
-      if (!isFakeMockUser(u)) {
+      if (!isFakeMockUser(u) && !isDeletedUserAccount(u)) {
         if (u.id) map.set(u.id, u);
         if (u.email) map.set(u.email.toLowerCase().trim(), u);
       }
@@ -112,7 +112,7 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
 
     // 2. Add all users from AuthContext
     users.forEach((u) => {
-      if (!isFakeMockUser(u)) {
+      if (!isFakeMockUser(u) && !isDeletedUserAccount(u)) {
         const existing = (u.id && map.get(u.id)) || (u.email && map.get(u.email.toLowerCase().trim()));
         if (!existing) {
           if (u.id) map.set(u.id, u);
@@ -130,6 +130,15 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
     championships.forEach((c) => {
       (c.registrations || []).forEach((reg) => {
         const emailKey = (reg.userEmail || '').toLowerCase().trim();
+        const idKey = (reg.userId || '').toLowerCase().trim();
+        const nameKey = (reg.userName || '').toLowerCase().trim();
+        if (
+          isDeletedUserAccount(reg) ||
+          isDeletedUserAccount({ id: idKey, email: emailKey, name: nameKey })
+        ) {
+          return;
+        }
+
         const existing = (reg.userId && map.get(reg.userId)) || (emailKey && map.get(emailKey));
         if (!existing) {
           const regAny = reg as any;
@@ -168,7 +177,9 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
 
     const uniqueMap = new Map<string, User>();
     map.forEach((u) => {
-      uniqueMap.set(u.id, u);
+      if (!isDeletedUserAccount(u)) {
+        uniqueMap.set(u.id, u);
+      }
     });
 
     return Array.from(uniqueMap.values());
@@ -389,23 +400,38 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
     if (!userToDelete) return;
     if (confirmationInput.trim().toUpperCase() !== 'EXCLUIR') return;
 
+    const targetId = userToDelete.id;
+    const targetEmail = userToDelete.email;
+    const targetName = userToDelete.name;
+
     try {
       setIsDeleting(true);
-      setDeleteStepText('1. Conectando ao Firebase Firestore e excluindo documento do usuário...');
-      await new Promise((r) => setTimeout(r, 400));
 
-      setDeleteStepText('2. Verificando e removendo inscrições em todas as ligas e campeonatos...');
-      await new Promise((r) => setTimeout(r, 400));
+      setDeleteStepText('1. Conectando ao Firebase Firestore e expurgando perfil...');
+      const result = await deleteUserAccountPermanently(targetId);
+
+      setDeleteStepText('2. Verificando e removendo inscrições e resultados em todas as ligas e campeonatos...');
+      await purgePilotFromAllChampionships(targetId, targetEmail, targetName);
 
       setDeleteStepText('3. Purgando do banco de dados local do backend server e liberando credencial...');
-      const result = await deleteUserAccountPermanently(userToDelete.id);
+      // Remove immediately from backendUsers in state
+      setBackendUsers((prev) =>
+        prev.filter(
+          (u) =>
+            u.id !== targetId &&
+            (!targetEmail || u.email?.toLowerCase().trim() !== targetEmail.toLowerCase().trim())
+        )
+      );
+
+      await refreshBackendUsers();
+      await reloadChampionships();
 
       setDeleteStepText('4. Concluído!');
-      await new Promise((r) => setTimeout(r, 300));
+      await new Promise((r) => setTimeout(r, 200));
 
       setAlertFeedback({
         type: 'success',
-        message: `Sucesso: A conta "${userToDelete.name}" (${userToDelete.email}) foi totalmente expurgada de todos os bancos de dados! O e-mail está livre para recadastro limpo.`,
+        message: `Sucesso: A conta "${targetName}" (${targetEmail}) foi totalmente expurgada de todos os bancos de dados! O e-mail está livre para recadastro limpo.`,
       });
 
       setUserToDelete(null);

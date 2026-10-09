@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import { db, isFirestoreQuotaExceeded, handleFirestoreError } from '../lib/firebase';
 import { Championship } from '../types';
+import { isDeletedUserAccount } from './userService';
 
 const CHAMPS_COLLECTION = 'championships';
 const DELETED_IDS_KEY = 'apexsim_deleted_champ_ids';
@@ -64,6 +65,20 @@ export const cleanDataForFirestore = (obj: any): any => {
   return obj;
 };
 
+export const sanitizeChampionshipRegistrations = (c: Championship): Championship => {
+  if (!c || !Array.isArray(c.registrations)) return c;
+  const filteredRegs = c.registrations.filter((r) => {
+    return !isDeletedUserAccount(r) && !isDeletedUserAccount({ id: r.userId, email: r.userEmail, name: r.userName });
+  });
+  if (filteredRegs.length !== c.registrations.length) {
+    return {
+      ...c,
+      registrations: filteredRegs,
+    };
+  }
+  return c;
+};
+
 export const isRealChampionship = (c: any): boolean => {
   if (!c || !c.id || !c.name) return false;
   if (MOCK_CHAMPIONSHIP_IDS.has(c.id)) return false;
@@ -83,7 +98,7 @@ export const fetchBackendChampionships = async (): Promise<{ championships: Cham
 
       if (data && Array.isArray(data.championships)) {
         return {
-          championships: data.championships.filter(isRealChampionship),
+          championships: data.championships.filter(isRealChampionship).map(sanitizeChampionshipRegistrations),
           deletedIds: serverDeletedIds,
         };
       }
@@ -99,13 +114,16 @@ export const saveChampionshipToCloud = async (champ: Championship): Promise<void
   // If user is saving/updating this championship, ensure it's not marked as deleted
   removeDeletedChampionshipId(champ.id);
 
+  // Filter out any registrations belonging to deleted users
+  const cleanChamp = sanitizeChampionshipRegistrations(champ);
+
   // Clean data for Firestore so no undefined values cause setDoc to fail
-  const sanitized = cleanDataForFirestore(champ);
+  const sanitized = cleanDataForFirestore(cleanChamp);
 
   // 1. Firestore (if quota is available)
   if (!isFirestoreQuotaExceeded()) {
     try {
-      const champDocRef = doc(db, CHAMPS_COLLECTION, champ.id);
+      const champDocRef = doc(db, CHAMPS_COLLECTION, cleanChamp.id);
       await setDoc(
         champDocRef,
         {
@@ -127,7 +145,7 @@ export const saveChampionshipToCloud = async (champ: Championship): Promise<void
     await fetch('/api/championships', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(champ),
+      body: JSON.stringify(cleanChamp),
     });
   } catch (err) {
     console.warn('Error saving championship to backend API:', err);
@@ -216,10 +234,14 @@ export const syncBackendWithFirestoreChampionships = async (): Promise<Champions
     snap.forEach((docSnap) => {
       const c = docSnap.data() as any;
       if (c && c.isDeleted !== true && isRealChampionship(c)) {
+        const cleanChamp = sanitizeChampionshipRegistrations({
+          ...c,
+          id: docSnap.id,
+        });
         const existing = mergedMap.get(docSnap.id);
         mergedMap.set(docSnap.id, {
           ...existing,
-          ...c,
+          ...cleanChamp,
           id: docSnap.id,
         });
       }
@@ -228,7 +250,7 @@ export const syncBackendWithFirestoreChampionships = async (): Promise<Champions
     console.warn('Error getting Firestore championships:', err);
   }
 
-  const allMerged = Array.from(mergedMap.values()).filter(isRealChampionship);
+  const allMerged = Array.from(mergedMap.values()).filter(isRealChampionship).map(sanitizeChampionshipRegistrations);
 
   // 4. Ensure backend has active ones
   for (const c of allMerged) {
@@ -250,9 +272,9 @@ export const subscribeToChampionships = (onChampionshipsChange: (champs: Champio
   try {
     const notifySubscribers = () => {
       const deletedSet = getDeletedChampionshipIds();
-      const unified = Array.from(championshipMemoryMap.values()).filter(
-        (c) => isRealChampionship(c) && !deletedSet.has(c.id)
-      );
+      const unified = Array.from(championshipMemoryMap.values())
+        .map(sanitizeChampionshipRegistrations)
+        .filter((c) => isRealChampionship(c) && !deletedSet.has(c.id));
       // Sort newest first
       unified.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
       onChampionshipsChange(unified);
@@ -261,7 +283,7 @@ export const subscribeToChampionships = (onChampionshipsChange: (champs: Champio
     // 1. Initial load from backend & Firestore
     syncBackendWithFirestoreChampionships().then((initial) => {
       if (initial.length > 0) {
-        initial.forEach((c) => championshipMemoryMap.set(c.id, c));
+        initial.forEach((c) => championshipMemoryMap.set(c.id, sanitizeChampionshipRegistrations(c)));
         notifySubscribers();
       }
     });
@@ -284,10 +306,10 @@ export const subscribeToChampionships = (onChampionshipsChange: (champs: Champio
             !deletedSet.has(docSnap.id) &&
             isRealChampionship(data)
           ) {
-            championshipMemoryMap.set(docSnap.id, {
+            championshipMemoryMap.set(docSnap.id, sanitizeChampionshipRegistrations({
               ...data,
               id: docSnap.id,
-            });
+            }));
           }
         });
 

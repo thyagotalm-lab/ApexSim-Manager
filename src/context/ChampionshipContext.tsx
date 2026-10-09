@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { Championship, PenaltyType, RaceProtest, RaceResultItem, RegistrationPilot, StageRound, User } from '../types';
 import { useAuth } from './AuthContext';
+import { addDeletedUserTombstone, isDeletedUserAccount } from '../services/userService';
 import {
   subscribeToChampionships,
   saveChampionshipToCloud,
@@ -89,6 +90,7 @@ interface ChampionshipContextType {
     totalCommunityTrophies: number;
   };
   propagatePilotProfileUpdate: (oldId: string, newId: string, newName: string, userEmail?: string) => Promise<void>;
+  purgePilotFromAllChampionships: (userId: string, userEmail?: string, userName?: string) => Promise<void>;
   reloadChampionships: () => Promise<void>;
 }
 
@@ -1449,6 +1451,118 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
     });
   };
 
+  const purgePilotFromAllChampionships = async (
+    userId: string,
+    userEmail?: string,
+    userName?: string
+  ) => {
+    const cleanId = (userId || '').trim().toLowerCase();
+    const cleanEmail = (userEmail || '').trim().toLowerCase();
+    const cleanName = (userName || '').trim().toLowerCase();
+
+    // 1. Register tombstones immediately in memory & local storage
+    if (cleanId) addDeletedUserTombstone(cleanId);
+    if (cleanEmail) addDeletedUserTombstone(cleanEmail);
+    if (cleanName) addDeletedUserTombstone(cleanName);
+
+    setChampionships((prev) => {
+      const updated = prev.map((champ) => {
+        let changed = false;
+
+        // 1. Registrations
+        const origRegLen = (champ.registrations || []).length;
+        const updatedRegistrations = (champ.registrations || []).filter((reg) => {
+          const rId = (reg.userId || '').toLowerCase().trim();
+          const rEmail = (reg.userEmail || '').toLowerCase().trim();
+          const rName = (reg.userName || '').toLowerCase().trim();
+          const matches =
+            (cleanId && rId === cleanId) ||
+            (cleanEmail && rEmail === cleanEmail) ||
+            (cleanName && rName === cleanName);
+          return !matches;
+        });
+        if (updatedRegistrations.length !== origRegLen) {
+          changed = true;
+        }
+
+        // 2. AdminIds
+        const origAdminLen = (champ.adminIds || []).length;
+        const updatedAdminIds = (champ.adminIds || []).filter((aId) => {
+          return cleanId ? aId.toLowerCase().trim() !== cleanId : true;
+        });
+        if (updatedAdminIds.length !== origAdminLen) {
+          changed = true;
+        }
+
+        // 3. Stages, results, sprint results, and poles
+        const updatedStages = (champ.stages || []).map((stage) => {
+          let stageChanged = false;
+
+          const origResLen = (stage.results || []).length;
+          const updatedResults = (stage.results || []).filter((res) => {
+            const matches =
+              (cleanId && res.driverId?.toLowerCase().trim() === cleanId) ||
+              (cleanEmail && (res as any).driverEmail?.toLowerCase().trim() === cleanEmail) ||
+              (cleanName && res.driverName?.toLowerCase().trim() === cleanName);
+            return !matches;
+          });
+          if (updatedResults.length !== origResLen) stageChanged = true;
+
+          const origSprintLen = (stage.sprintResults || []).length;
+          const updatedSprintResults = (stage.sprintResults || []).filter((res) => {
+            const matches =
+              (cleanId && res.driverId?.toLowerCase().trim() === cleanId) ||
+              (cleanEmail && (res as any).driverEmail?.toLowerCase().trim() === cleanEmail) ||
+              (cleanName && res.driverName?.toLowerCase().trim() === cleanName);
+            return !matches;
+          });
+          if (updatedSprintResults.length !== origSprintLen) stageChanged = true;
+
+          let updatedPole = stage.poleDriverId;
+          if (cleanId && stage.poleDriverId?.toLowerCase().trim() === cleanId) {
+            updatedPole = undefined;
+            stageChanged = true;
+          }
+          let updatedFL = stage.fastestLapDriverId;
+          if (cleanId && stage.fastestLapDriverId?.toLowerCase().trim() === cleanId) {
+            updatedFL = undefined;
+            stageChanged = true;
+          }
+
+          if (stageChanged) {
+            changed = true;
+            return {
+              ...stage,
+              results: updatedResults,
+              sprintResults: updatedSprintResults,
+              poleDriverId: updatedPole,
+              fastestLapDriverId: updatedFL,
+            };
+          }
+          return stage;
+        });
+
+        if (changed) {
+          const updatedChamp = {
+            ...champ,
+            registrations: updatedRegistrations,
+            adminIds: updatedAdminIds,
+            stages: updatedStages,
+          };
+          saveChampionshipToCloud(updatedChamp).catch(() => {});
+          return updatedChamp;
+        }
+        return champ;
+      });
+
+      try {
+        localStorage.setItem('apexsim_championships_db', JSON.stringify(updated));
+      } catch (_) {}
+
+      return updated;
+    });
+  };
+
   const reloadChampionships = async () => {
     try {
       const res = await syncBackendWithFirestoreChampionships();
@@ -1496,6 +1610,7 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
         closeDriverOfTheDayVoting,
         getDriverCommunityTrophies,
         propagatePilotProfileUpdate,
+        purgePilotFromAllChampionships,
         reloadChampionships,
       }}
     >

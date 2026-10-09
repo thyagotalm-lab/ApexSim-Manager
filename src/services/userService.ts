@@ -6,6 +6,8 @@ import {
   updateDoc,
   onSnapshot,
   getDocs,
+  getDoc,
+  arrayUnion,
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, isFirestoreQuotaExceeded, handleFirestoreError } from '../lib/firebase';
@@ -14,33 +16,59 @@ import { THYAGO_ADMIN_USER } from '../data/mockData';
 
 const USERS_COLLECTION = 'users';
 
-export const DELETED_USERS_SET = new Set([
-  'user_1791048231452_xa2l',
-  'user_1791049287095_z3as',
-  'user_1791244365686_k1vw',
-  'mouraengambiental@gmail.com',
-  'testes123@gmail.com',
-  'tyko moura',
-  'piloto de testes',
-]);
+// Read locally persisted deleted identifiers
+const getPersistedDeletedUsers = (): Set<string> => {
+  const base = [
+    'user_1791048231452_xa2l',
+    'user_1791049287095_z3as',
+    'user_1791244365686_k1vw',
+    'mouraengambiental@gmail.com',
+    'testes123@gmail.com',
+    'tyko moura',
+    'piloto de testes',
+  ];
+  try {
+    const saved = localStorage.getItem('apexsim_deleted_users_db');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) {
+        parsed.forEach((id: string) => base.push(id.toLowerCase().trim()));
+      }
+    }
+  } catch (_) {}
+  return new Set(base.map((item) => item.toLowerCase().trim()));
+};
+
+export const DELETED_USERS_SET = getPersistedDeletedUsers();
+
+export const addDeletedUserTombstone = (identifier: string) => {
+  if (!identifier) return;
+  const clean = identifier.toLowerCase().trim();
+  DELETED_USERS_SET.add(clean);
+  try {
+    const arr = Array.from(DELETED_USERS_SET);
+    localStorage.setItem('apexsim_deleted_users_db', JSON.stringify(arr));
+  } catch (_) {}
+};
 
 export const isDeletedUserAccount = (u: any): boolean => {
   if (!u) return false;
-  const id = (u.id || '').toLowerCase().trim();
-  const email = (u.email || '').toLowerCase().trim();
-  const name = (u.name || '').toLowerCase().trim();
-  return (
-    DELETED_USERS_SET.has(id) ||
-    DELETED_USERS_SET.has(email) ||
-    DELETED_USERS_SET.has(name)
+  const id = (u.id || u.userId || '').toString().toLowerCase().trim();
+  const email = (u.email || u.userEmail || '').toString().toLowerCase().trim();
+  const name = (u.name || u.userName || u.driverName || '').toString().toLowerCase().trim();
+  return Boolean(
+    (id && DELETED_USERS_SET.has(id)) ||
+    (email && DELETED_USERS_SET.has(email)) ||
+    (name && DELETED_USERS_SET.has(name))
   );
 };
 
 export const isFakeMockUser = (u: any): boolean => {
-  if (!u || !u.id) return true;
+  if (!u) return true;
   if (isDeletedUserAccount(u)) return true;
-  if (u.id.startsWith('user_pilot_') || u.id.startsWith('user_admin_')) return true;
-  const email = (u.email || '').toLowerCase().trim();
+  const id = (u.id || u.userId || '').toString().toLowerCase().trim();
+  if (id.startsWith('user_pilot_') || id.startsWith('user_admin_')) return true;
+  const email = (u.email || u.userEmail || '').toString().toLowerCase().trim();
   if (
     email.includes('@motorsport.com') ||
     email.includes('@simracing.br') ||
@@ -99,32 +127,68 @@ export const sanitizeUserProfileTeams = (u: User): User => {
 };
 
 // Permanently delete user from Firestore and Backend across all databases
-export const deleteUserCompletely = async (id: string, email?: string): Promise<{ success: boolean; message: string }> => {
+export const deleteUserCompletely = async (id: string, email?: string, name?: string): Promise<{ success: boolean; message: string }> => {
   const cleanId = id.trim();
   const cleanEmail = (email || '').toLowerCase().trim();
+  const cleanName = (name || '').toLowerCase().trim();
 
   // Protect Master Admin account
   if (cleanEmail === 'thyago.talm@gmail.com' || cleanId === 'user_thyago_talm') {
     throw new Error('A conta do Admin Master (thyago.talm@gmail.com) é protegida contra exclusão.');
   }
 
-  DELETED_USERS_SET.add(cleanId.toLowerCase());
+  // Register tombstones in memory & localStorage immediately
+  addDeletedUserTombstone(cleanId);
+  if (cleanEmail) addDeletedUserTombstone(cleanEmail);
+  if (cleanName) addDeletedUserTombstone(cleanName);
 
-  // 1. Delete user document from Firestore
+  // 1. Delete user document from Firestore and register in user_metadata/deleted_users
   if (!isFirestoreQuotaExceeded()) {
     try {
-      await deleteDoc(doc(db, USERS_COLLECTION, cleanId));
-      await setDoc(doc(db, 'user_metadata', 'deleted_users'), {
+      // 1a. Register in tombstone metadata doc
+      const identifiersToSave = [cleanId.toLowerCase()];
+      const tombstonePayload: Record<string, any> = {
         [cleanId]: true,
         updatedAt: serverTimestamp(),
-      }, { merge: true });
+      };
+      if (cleanEmail) {
+        identifiersToSave.push(cleanEmail);
+        tombstonePayload[cleanEmail.replace(/[\.\@]/g, '_')] = true;
+      }
+      if (cleanName) {
+        identifiersToSave.push(cleanName);
+        tombstonePayload[cleanName.replace(/[\.\@\s]/g, '_')] = true;
+      }
+      tombstonePayload.identifiers = arrayUnion(...identifiersToSave);
+      await setDoc(doc(db, 'user_metadata', 'deleted_users'), tombstonePayload, { merge: true });
+
+      // 1b. Delete primary user document
+      await deleteDoc(doc(db, USERS_COLLECTION, cleanId));
+
+      // 1c. Scan and delete any other documents matching this user ID, email or name
+      const userColSnap = await getDocs(collection(db, USERS_COLLECTION));
+      for (const d of userColSnap.docs) {
+        const dData = d.data();
+        const dId = (d.id || '').toLowerCase().trim();
+        const uId = (dData.id || '').toLowerCase().trim();
+        const uEmail = (dData.email || '').toLowerCase().trim();
+        const uName = (dData.name || '').toLowerCase().trim();
+        if (
+          dId === cleanId.toLowerCase() ||
+          uId === cleanId.toLowerCase() ||
+          (cleanEmail && uEmail === cleanEmail) ||
+          (cleanName && uName === cleanName)
+        ) {
+          await deleteDoc(doc(db, USERS_COLLECTION, d.id));
+        }
+      }
     } catch (err) {
       handleFirestoreError(err);
       console.warn('Error deleting user from Firestore users collection:', err);
     }
   }
 
-  // 2. Clean user from all championships in Firestore (registrations and admin lists)
+  // 2. Clean user from all championships in Firestore (registrations, admin lists, stage results)
   if (!isFirestoreQuotaExceeded()) {
     try {
       const champsCol = collection(db, 'championships');
@@ -134,30 +198,86 @@ export const deleteUserCompletely = async (id: string, email?: string): Promise<
         let modified = false;
 
         let registrations = champData.registrations || [];
-        const hasReg = registrations.some(
-          (r: any) =>
-            r.userId === cleanId ||
-            (cleanEmail && r.userEmail && r.userEmail.toLowerCase().trim() === cleanEmail)
-        );
-        if (hasReg) {
-          registrations = registrations.filter(
-            (r: any) =>
-              r.userId !== cleanId &&
-              (!cleanEmail || !r.userEmail || r.userEmail.toLowerCase().trim() !== cleanEmail)
-          );
+        const origRegLen = registrations.length;
+        registrations = registrations.filter((r: any) => {
+          const rId = (r.userId || '').toLowerCase().trim();
+          const rEmail = (r.userEmail || '').toLowerCase().trim();
+          const rName = (r.userName || '').toLowerCase().trim();
+          const matches =
+            rId === cleanId.toLowerCase() ||
+            (cleanEmail && rEmail === cleanEmail) ||
+            (cleanName && rName === cleanName);
+          return !matches;
+        });
+        if (registrations.length !== origRegLen) {
           modified = true;
         }
 
         let adminIds = champData.adminIds || [];
-        if (adminIds.includes(cleanId)) {
-          adminIds = adminIds.filter((aid: string) => aid !== cleanId);
+        if (adminIds.some((aid: string) => aid.toLowerCase().trim() === cleanId.toLowerCase())) {
+          adminIds = adminIds.filter((aid: string) => aid.toLowerCase().trim() !== cleanId.toLowerCase());
           modified = true;
+        }
+
+        // Clean from stage results
+        let stages = champData.stages || [];
+        if (Array.isArray(stages)) {
+          stages = stages.map((st: any) => {
+            let stageChanged = false;
+            if (Array.isArray(st.results)) {
+              const origLen = st.results.length;
+              const filteredResults = st.results.filter((res: any) => {
+                const resId = (res.driverId || '').toLowerCase().trim();
+                const resEmail = (res.driverEmail || '').toLowerCase().trim();
+                const resName = (res.driverName || '').toLowerCase().trim();
+                return !(
+                  resId === cleanId.toLowerCase() ||
+                  (cleanEmail && resEmail === cleanEmail) ||
+                  (cleanName && resName === cleanName)
+                );
+              });
+              if (filteredResults.length !== origLen) {
+                st.results = filteredResults;
+                stageChanged = true;
+              }
+            }
+            if (Array.isArray(st.sprintResults)) {
+              const origLen = st.sprintResults.length;
+              const filteredSprint = st.sprintResults.filter((res: any) => {
+                const resId = (res.driverId || '').toLowerCase().trim();
+                const resEmail = (res.driverEmail || '').toLowerCase().trim();
+                const resName = (res.driverName || '').toLowerCase().trim();
+                return !(
+                  resId === cleanId.toLowerCase() ||
+                  (cleanEmail && resEmail === cleanEmail) ||
+                  (cleanName && resName === cleanName)
+                );
+              });
+              if (filteredSprint.length !== origLen) {
+                st.sprintResults = filteredSprint;
+                stageChanged = true;
+              }
+            }
+            if (st.poleDriverId && st.poleDriverId.toLowerCase().trim() === cleanId.toLowerCase()) {
+              delete st.poleDriverId;
+              stageChanged = true;
+            }
+            if (st.fastestLapDriverId && st.fastestLapDriverId.toLowerCase().trim() === cleanId.toLowerCase()) {
+              delete st.fastestLapDriverId;
+              stageChanged = true;
+            }
+            if (stageChanged) {
+              modified = true;
+            }
+            return st;
+          });
         }
 
         if (modified) {
           await updateDoc(doc(db, 'championships', champDoc.id), {
             registrations,
             adminIds,
+            stages,
             updatedAt: serverTimestamp(),
           });
         }
@@ -168,22 +288,52 @@ export const deleteUserCompletely = async (id: string, email?: string): Promise<
     }
   }
 
-  // 3. Delete from Backend Server API
+  // 3. Delete from Backend Server API (passing email and name in body and query for complete purge)
   try {
-    await fetch(`/api/users/${cleanId}`, { method: 'DELETE' });
+    await fetch(`/api/users/${encodeURIComponent(cleanId)}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: cleanEmail, name: cleanName }),
+    });
   } catch (err) {
     console.warn('Error deleting user from backend server:', err);
   }
 
-  // 4. Clean local storage cache
+  // 4. Clean local storage cache for users and championships
   try {
     const cachedUsers = localStorage.getItem('apexsim_users_db');
     if (cachedUsers) {
       const parsed: User[] = JSON.parse(cachedUsers);
       const filtered = parsed.filter(
-        (u) => u.id !== cleanId && (!cleanEmail || u.email.toLowerCase().trim() !== cleanEmail)
+        (u) =>
+          u.id.toLowerCase().trim() !== cleanId.toLowerCase() &&
+          (!cleanEmail || (u.email || '').toLowerCase().trim() !== cleanEmail) &&
+          (!cleanName || (u.name || '').toLowerCase().trim() !== cleanName)
       );
       localStorage.setItem('apexsim_users_db', JSON.stringify(filtered));
+    }
+
+    const cachedChamps = localStorage.getItem('apexsim_championships_db');
+    if (cachedChamps) {
+      const parsedChamps = JSON.parse(cachedChamps);
+      if (Array.isArray(parsedChamps)) {
+        const cleanedChamps = parsedChamps.map((c: any) => {
+          if (Array.isArray(c.registrations)) {
+            c.registrations = c.registrations.filter((r: any) => {
+              const rId = (r.userId || '').toLowerCase().trim();
+              const rEmail = (r.userEmail || '').toLowerCase().trim();
+              const rName = (r.userName || '').toLowerCase().trim();
+              return !(
+                rId === cleanId.toLowerCase() ||
+                (cleanEmail && rEmail === cleanEmail) ||
+                (cleanName && rName === cleanName)
+              );
+            });
+          }
+          return c;
+        });
+        localStorage.setItem('apexsim_championships_db', JSON.stringify(cleanedChamps));
+      }
     }
 
     const currentLoggedInId = localStorage.getItem('apexsim_current_user_id');
@@ -206,6 +356,10 @@ export const fetchBackendUsers = async (): Promise<User[]> => {
     const res = await fetch('/api/users');
     if (res.ok) {
       const data = await res.json();
+      // Incorporate any tombstones from backend into our local deleted set
+      if (data && Array.isArray(data.deletedIds)) {
+        data.deletedIds.forEach((did: string) => addDeletedUserTombstone(did));
+      }
       if (data && Array.isArray(data.users)) {
         return data.users.filter((u: User) => !isFakeMockUser(u)).map(sanitizeUserProfileTeams);
       }
@@ -266,13 +420,42 @@ export const syncBackendWithFirestore = async (): Promise<User[]> => {
     }
   });
 
-  // 2. Get Firestore users (only if quota is not exceeded to prevent backoff hanging)
+  // 2. Sync tombstones from Firestore metadata if available
+  if (!isFirestoreQuotaExceeded()) {
+    try {
+      const delDoc = await getDoc(doc(db, 'user_metadata', 'deleted_users'));
+      if (delDoc.exists()) {
+        const data = delDoc.data();
+        if (Array.isArray(data.identifiers)) {
+          data.identifiers.forEach((item: string) => addDeletedUserTombstone(item));
+        }
+        Object.keys(data).forEach((key) => {
+          if (key !== 'updatedAt' && data[key] === true) {
+            addDeletedUserTombstone(key);
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  // 2b. Get Firestore users (only if quota is not exceeded to prevent backoff hanging)
   if (!isFirestoreQuotaExceeded()) {
     try {
       const colRef = collection(db, USERS_COLLECTION);
       const snap = await getDocs(colRef);
       snap.forEach((docSnap) => {
         const u = docSnap.data() as User;
+        const dId = (docSnap.id || '').toLowerCase().trim();
+        if (
+          DELETED_USERS_SET.has(dId) ||
+          isDeletedUserAccount(u) ||
+          isDeletedUserAccount({ id: docSnap.id, email: u?.email, name: u?.name })
+        ) {
+          // It's a deleted user! Actively purge it from Firestore
+          deleteDoc(doc(db, USERS_COLLECTION, docSnap.id)).catch(() => {});
+          return;
+        }
+
         if (u && u.email && !isFakeMockUser(u)) {
           const emailKey = u.email.toLowerCase().trim();
           const existing = mergedMap.get(emailKey);
@@ -298,6 +481,17 @@ export const syncBackendWithFirestore = async (): Promise<User[]> => {
         champData.championships.forEach((c: any) => {
           (c.registrations || []).forEach((r: any) => {
             const emailKey = (r.userEmail || '').toLowerCase().trim();
+            const idKey = (r.userId || '').toLowerCase().trim();
+            const nameKey = (r.userName || '').toLowerCase().trim();
+            if (
+              (idKey && DELETED_USERS_SET.has(idKey)) ||
+              (emailKey && DELETED_USERS_SET.has(emailKey)) ||
+              (nameKey && DELETED_USERS_SET.has(nameKey)) ||
+              isDeletedUserAccount(r) ||
+              isDeletedUserAccount({ id: r.userId, email: r.userEmail, name: r.userName })
+            ) {
+              return;
+            }
             if (emailKey && !mergedMap.has(emailKey)) {
               mergedMap.set(emailKey, {
                 id: r.userId || `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -434,6 +628,15 @@ export const subscribeToUsers = (onUsersChange: (users: User[]) => void) => {
         const firestoreMap = new Map<string, User>();
         snapshot.forEach((docSnap) => {
           const data = docSnap.data() as User;
+          const dId = (docSnap.id || '').toLowerCase().trim();
+          if (
+            DELETED_USERS_SET.has(dId) ||
+            isDeletedUserAccount(data) ||
+            isDeletedUserAccount({ id: docSnap.id, email: data?.email, name: data?.name })
+          ) {
+            deleteDoc(doc(db, USERS_COLLECTION, docSnap.id)).catch(() => {});
+            return;
+          }
           if (data && data.email && !isFakeMockUser(data)) {
             const emailKey = data.email.toLowerCase().trim();
             let userData: User = {

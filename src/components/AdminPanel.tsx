@@ -3,6 +3,7 @@ import { Shield, Users, Award, Calendar, Plus, UserPlus, FileText, CheckCircle2,
 import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
 import { StageRound } from '../types';
+import { isDeletedUserAccount } from '../services/userService';
 import { EditChampionshipModal } from './EditChampionshipModal';
 import { StewardsProtestsModal } from './StewardsProtestsModal';
 
@@ -45,8 +46,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     );
   }
 
-  const pendingPilots = activeChampionship.registrations.filter((r) => r.status === 'PENDENTE');
-  const approvedPilots = activeChampionship.registrations.filter((r) => r.status === 'APROVADO');
+  const pendingPilots = activeChampionship.registrations.filter((r) => r.status === 'PENDENTE' && !isDeletedUserAccount(r));
+  const approvedPilots = activeChampionship.registrations.filter((r) => r.status === 'APROVADO' && !isDeletedUserAccount(r));
   const adminUsers = users.filter((u) => activeChampionship.adminIds.includes(u.id));
   const pendingProtests = (activeChampionship.protests || []).filter((p) => p.status === 'PENDENTE');
 
