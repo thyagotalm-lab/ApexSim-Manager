@@ -6,6 +6,7 @@ import { CountryFlag } from './CountryFlag';
 import { StageRound } from '../types';
 import { SubmitProtestModal } from './SubmitProtestModal';
 import { StewardsProtestsModal } from './StewardsProtestsModal';
+import { sortStagesChronologically, formatStageDateDisplay } from '../utils/stageUtils';
 
 interface CalendarStagesProps {
   onOpenResultsModal: (stage: StageRound, raceType?: 'main' | 'sprint') => void;
@@ -120,8 +121,12 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
           <h2 className="text-xl font-bold text-white font-display mt-0.5">
             {activeChampionship.name}
           </h2>
-          <div className="text-xs text-slate-400 flex items-center gap-2 mt-1">
+          <div className="text-xs text-slate-400 flex items-center gap-2 mt-1 flex-wrap">
             <span>{activeChampionship.stages.length} Etapas programadas</span>
+            <span>·</span>
+            <span className="text-emerald-400/90 font-medium bg-emerald-950/40 border border-emerald-900/50 px-2 py-0.5 rounded text-[11px]">
+              Ordem cronológica por data
+            </span>
             <span>·</span>
             <span>Horário de Brasília (BRT)</span>
           </div>
@@ -170,7 +175,7 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
             )}
           </div>
         ) : (
-          activeChampionship.stages.map((stage) => {
+          sortStagesChronologically(activeChampionship.stages).map((stage) => {
             const winner = stage.results?.find((r) => r.finishPosition === 1 && r.status === 'FINISHED');
             const sprintWinner = stage.sprintResults?.find((r) => r.finishPosition === 1 && r.status === 'FINISHED');
             const hasSprintResults = Boolean(stage.sprintResults && stage.sprintResults.length > 0);
@@ -216,7 +221,7 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
                       <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-slate-400 mt-1 font-mono tabular-nums">
                         <span className="flex items-center gap-1.5 text-slate-300 font-sans">
                           <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                          {new Date(stage.date + 'T12:00:00Z').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          {formatStageDateDisplay(stage.date)}
                         </span>
                         <span className="text-slate-600">·</span>
                         <span className="flex items-center gap-1.5 text-slate-300">

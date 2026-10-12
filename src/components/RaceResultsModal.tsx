@@ -15,6 +15,8 @@ import {
   Flag,
   Sparkles,
   ChevronRight,
+  UserX,
+  UserCheck,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
@@ -396,6 +398,61 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({
     setResultsList(updated);
   };
 
+  // Toggle driver missed race (Ausente / Faltou a corrida / DNS)
+  const toggleDriverMissedRace = (driverId: string) => {
+    const currentList = raceType === 'sprint' ? sprintResultsList : mainResultsList;
+    const target = currentList.find((i) => i.driverId === driverId);
+    if (!target) return;
+
+    const isCurrentlyDNS = target.status === 'DNS';
+    const newStatus: RaceResultItem['status'] = isCurrentlyDNS ? 'FINISHED' : 'DNS';
+
+    const updated = currentList.map((item) => {
+      if (item.driverId === driverId) {
+        return {
+          ...item,
+          status: newStatus,
+          gap:
+            newStatus === 'DNS'
+              ? 'Faltou (DNS)'
+              : item.gap === 'Faltou (DNS)'
+              ? ''
+              : item.gap,
+          pointsAwarded: computePoints(
+            item.finishPosition,
+            item.driverId,
+            newStatus,
+            item.penaltiesPoints,
+            raceType
+          ),
+        };
+      }
+      return item;
+    });
+
+    setResultsList(updated);
+
+    // If driver was set as Pole and is now marked as absent (DNS), reassign pole
+    if (newStatus === 'DNS') {
+      if (raceType === 'main' && poleDriverId === driverId) {
+        const nextPresent = updated.find((d) => d.driverId !== driverId && d.status !== 'DNS');
+        if (nextPresent) setPoleDriverId(nextPresent.driverId);
+      } else if (raceType === 'sprint' && sprintPoleDriverId === driverId) {
+        const nextPresent = updated.find((d) => d.driverId !== driverId && d.status !== 'DNS');
+        if (nextPresent) setSprintPoleDriverId(nextPresent.driverId);
+      }
+
+      // If driver was set as Fastest Lap and is now absent (DNS), reassign fastest lap
+      if (raceType === 'main' && fastestLapDriverId === driverId) {
+        const nextPresent = updated.find((d) => d.driverId !== driverId && d.status !== 'DNS');
+        if (nextPresent) setFastestLapDriverId(nextPresent.driverId);
+      } else if (raceType === 'sprint' && sprintFastestLapDriverId === driverId) {
+        const nextPresent = updated.find((d) => d.driverId !== driverId && d.status !== 'DNS');
+        if (nextPresent) setSprintFastestLapDriverId(nextPresent.driverId);
+      }
+    }
+  };
+
   const updateItemPenalties = (driverId: string, penalty: number, notes?: string) => {
     const currentList = raceType === 'sprint' ? sprintResultsList : mainResultsList;
     const updated = currentList.map((item) => {
@@ -516,6 +573,8 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({
   const sortedFinishItems = [...resultsList].sort(
     (a, b) => (a.finishPosition || 0) - (b.finishPosition || 0)
   );
+
+  const absentCount = resultsList.filter((r) => r.status === 'DNS').length;
 
   const activePoleDriverId = raceType === 'main' ? poleDriverId : sprintPoleDriverId;
   const activePoleTime = raceType === 'main' ? poleTime : sprintPoleTime;
@@ -751,6 +810,44 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({
                 {/* Quick workflow helpers for Stewards/Admins */}
                 {isAdmin && (
                   <div className="flex items-center gap-2 flex-wrap">
+                    {absentCount > 0 && (
+                      <span className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-rose-950/80 border border-rose-700/80 text-rose-300 flex items-center gap-1.5 shadow-sm">
+                        <UserX className="w-3.5 h-3.5 text-rose-400" />
+                        <span>{absentCount} {absentCount === 1 ? 'piloto faltou' : 'pilotos faltaram'}</span>
+                      </span>
+                    )}
+
+                    <div className="flex items-center gap-1 bg-slate-900 border border-slate-700/90 rounded-lg px-2 py-1 text-[11px] hover:border-slate-600 transition-colors">
+                      <UserX className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            toggleDriverMissedRace(e.target.value);
+                            e.target.value = '';
+                          }
+                        }}
+                        defaultValue=""
+                        className="bg-transparent text-slate-300 text-[11px] focus:outline-none cursor-pointer pr-1"
+                        title="Selecione um piloto para marcar ou desmarcar falta na corrida"
+                      >
+                        <option value="" disabled className="bg-slate-900 text-slate-400">
+                          + Marcar falta no grid...
+                        </option>
+                        {resultsList.map((driver) => {
+                          const uName = users.find((u) => u.id === driver.driverId)?.name || driver.driverName;
+                          return (
+                            <option
+                              key={driver.driverId}
+                              value={driver.driverId}
+                              className="bg-slate-900 text-white"
+                            >
+                              #{driver.number} {uName} {driver.status === 'DNS' ? '✓ (Faltou)' : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
                     {gridStep === 'grid' ? (
                       <>
                         <button
@@ -1033,17 +1130,21 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({
                         {isAdmin && (
                           <th className="py-2.5 px-3 text-center w-28">Seletor Direto</th>
                         )}
+                        <th className="py-2.5 px-3 text-center w-36">Presença / Falta</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-mono-numbers">
                       {sortedGridItems.map((item, sortedIdx) => {
                         const isPole = item.driverId === activePoleDriverId;
+                        const isAbsent = item.status === 'DNS';
 
                         return (
                           <tr
                             key={item.driverId}
                             className={`hover:bg-slate-800/30 transition-colors ${
-                              item.gridPosition === 1
+                              isAbsent
+                                ? 'bg-rose-950/20 border-l-2 border-rose-500 opacity-90'
+                                : item.gridPosition === 1
                                 ? 'bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-transparent border-l-2 border-amber-400'
                                 : item.gridPosition === 2
                                 ? 'bg-gradient-to-r from-slate-200/10 via-slate-300/5 to-transparent border-l-2 border-slate-300'
@@ -1098,12 +1199,12 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({
                                   #{item.number}
                                 </span>
                                 <div>
-                                  <div className="font-semibold text-white flex items-center gap-1.5">
+                                  <div className="font-semibold text-white flex items-center gap-1.5 flex-wrap">
                                     <span>
                                       {users.find((u) => u.id === item.driverId)?.name ||
                                         item.driverName}
                                     </span>
-                                    {isPole && (
+                                    {isPole && !isAbsent && (
                                       <span className="text-[10px] bg-amber-950/90 text-amber-300 border border-amber-500/50 px-1.5 py-0.2 rounded font-mono font-bold flex items-center gap-1 shadow-sm">
                                         <Sparkles className="w-2.5 h-2.5 text-amber-400" />
                                         <span>POLE POSITION</span>
@@ -1112,6 +1213,12 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({
                                             (+{currentPoleBonusValue})
                                           </span>
                                         )}
+                                      </span>
+                                    )}
+                                    {isAbsent && (
+                                      <span className="text-[10px] bg-rose-950 text-rose-300 border border-rose-600/80 px-1.5 py-0.2 rounded font-mono font-bold flex items-center gap-1 shadow-sm">
+                                        <UserX className="w-2.5 h-2.5 text-rose-400" />
+                                        <span>FALTOU À CORRIDA</span>
                                       </span>
                                     )}
                                   </div>
@@ -1167,6 +1274,42 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({
                                 </select>
                               </td>
                             )}
+
+                            {/* Attendance / Mark Absent (Faltou a corrida) */}
+                            <td className="py-2.5 px-3 text-center">
+                              {isAdmin ? (
+                                isAbsent ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleDriverMissedRace(item.driverId)}
+                                    className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-rose-600 hover:bg-rose-500 text-white border border-rose-400 shadow-md shadow-rose-950/50 cursor-pointer transition-all animate-in fade-in"
+                                    title="Piloto marcado como ausente (faltou a corrida). Clique para desmarcar e torná-lo Presente no grid."
+                                  >
+                                    <UserX className="w-3.5 h-3.5 text-rose-100" />
+                                    <span>Faltou à corrida</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleDriverMissedRace(item.driverId)}
+                                    className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-slate-900 hover:bg-rose-950/70 text-slate-300 hover:text-rose-200 border border-slate-700 hover:border-rose-600/70 cursor-pointer transition-all group"
+                                    title="Marcar que este piloto faltou à corrida (DNS / Ausente)"
+                                  >
+                                    <UserX className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-400 transition-colors" />
+                                    <span>Faltou à corrida</span>
+                                  </button>
+                                )
+                              ) : (
+                                isAbsent ? (
+                                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-400 bg-rose-950/60 border border-rose-800/80 px-2 py-0.5 rounded">
+                                    <UserX className="w-3 h-3 text-rose-400" />
+                                    <span>Faltou</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-[11px] text-emerald-400 font-medium">Presente</span>
+                                )
+                              )}
+                            </td>
                           </tr>
                         );
                       })}
@@ -1367,30 +1510,56 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({
                             {/* Status Selector */}
                             <td className="py-2.5 px-3">
                               {isAdmin ? (
-                                <select
-                                  value={item.status}
-                                  onChange={(e) =>
-                                    updateItemStatus(
-                                      item.driverId,
-                                      e.target.value as RaceResultItem['status']
-                                    )
-                                  }
-                                  className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-red-500 cursor-pointer"
-                                >
-                                  <option value="FINISHED">Completou (FINISHED)</option>
-                                  <option value="DNF">Abandono (DNF)</option>
-                                  <option value="DNS">Não Largou (DNS)</option>
-                                  <option value="DSQ">Desclassificado (DSQ)</option>
-                                </select>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <select
+                                    value={item.status}
+                                    onChange={(e) =>
+                                      updateItemStatus(
+                                        item.driverId,
+                                        e.target.value as RaceResultItem['status']
+                                      )
+                                    }
+                                    className={`bg-slate-900 border rounded px-2 py-1 text-xs text-white focus:outline-none cursor-pointer ${
+                                      item.status === 'DNS'
+                                        ? 'border-rose-500/80 text-rose-300 font-bold'
+                                        : 'border-slate-700 focus:border-red-500'
+                                    }`}
+                                  >
+                                    <option value="FINISHED">Completou (FINISHED)</option>
+                                    <option value="DNF">Abandono (DNF)</option>
+                                    <option value="DNS">Não Largou / Faltou (DNS)</option>
+                                    <option value="DSQ">Desclassificado (DSQ)</option>
+                                  </select>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleDriverMissedRace(item.driverId)}
+                                    className={`px-2 py-1 rounded text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition-all ${
+                                      item.status === 'DNS'
+                                        ? 'bg-rose-600 hover:bg-rose-500 text-white border border-rose-400 shadow-sm'
+                                        : 'bg-slate-800 hover:bg-rose-950/80 text-slate-300 hover:text-rose-200 border border-slate-700 hover:border-rose-700/80'
+                                    }`}
+                                    title={
+                                      item.status === 'DNS'
+                                        ? 'Piloto marcado como ausente. Clique para desmarcar falta.'
+                                        : 'Marcar rapidamente que este piloto faltou à corrida (DNS)'
+                                    }
+                                  >
+                                    <UserX className="w-3 h-3" />
+                                    <span>{item.status === 'DNS' ? 'Faltou' : 'Faltou?'}</span>
+                                  </button>
+                                </div>
                               ) : (
                                 <span
                                   className={
                                     item.status === 'FINISHED'
-                                      ? 'text-emerald-400'
+                                      ? 'text-emerald-400 font-medium'
+                                      : item.status === 'DNS'
+                                      ? 'text-rose-400 font-bold bg-rose-950/60 border border-rose-800/80 px-2 py-0.5 rounded text-[11px] inline-flex items-center gap-1'
                                       : 'text-red-400 font-semibold'
                                   }
                                 >
-                                  {item.status}
+                                  {item.status === 'DNS' && <UserX className="w-3 h-3 text-rose-400" />}
+                                  {item.status === 'DNS' ? 'Faltou à corrida' : item.status}
                                 </span>
                               )}
                             </td>

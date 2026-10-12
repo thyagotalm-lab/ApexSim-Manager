@@ -11,6 +11,7 @@ import {
 import { db, isFirestoreQuotaExceeded, handleFirestoreError } from '../lib/firebase';
 import { Championship } from '../types';
 import { isDeletedUserAccount } from './userService';
+import { sortStagesChronologically } from '../utils/stageUtils';
 
 const CHAMPS_COLLECTION = 'championships';
 const DELETED_IDS_KEY = 'apexsim_deleted_champ_ids';
@@ -66,17 +67,29 @@ export const cleanDataForFirestore = (obj: any): any => {
 };
 
 export const sanitizeChampionshipRegistrations = (c: Championship): Championship => {
-  if (!c || !Array.isArray(c.registrations)) return c;
+  if (!c) return c;
+  let updated = c;
+
+  // Always organize the stages in strict chronological order by date and time
+  if (Array.isArray(c.stages) && c.stages.length > 0) {
+    const sorted = sortStagesChronologically(c.stages);
+    updated = {
+      ...updated,
+      stages: sorted,
+    };
+  }
+
+  if (!Array.isArray(c.registrations)) return updated;
   const filteredRegs = c.registrations.filter((r) => {
     return !isDeletedUserAccount(r) && !isDeletedUserAccount({ id: r.userId, email: r.userEmail, name: r.userName });
   });
   if (filteredRegs.length !== c.registrations.length) {
     return {
-      ...c,
+      ...updated,
       registrations: filteredRegs,
     };
   }
-  return c;
+  return updated;
 };
 
 export const isRealChampionship = (c: any): boolean => {

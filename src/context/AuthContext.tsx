@@ -11,6 +11,7 @@ import {
   sanitizeUserProfileTeams,
   adminUpdatePilotProfileService,
   fetchBackendUsers,
+  resetAllUsersSimRatingService,
 } from '../services/userService';
 
 interface AuthContextType {
@@ -37,6 +38,7 @@ interface AuthContextType {
   logout: () => void;
   updateUser: (updated: User) => void;
   resetPilotStats: (userId: string) => void;
+  resetAllSimRatingStats: () => Promise<{ success: boolean; error?: string }>;
   syncUsers: () => Promise<void>;
   deleteUserAccountPermanently: (userId: string) => Promise<{ success: boolean; message: string }>;
   adminUpdatePilotProfile: (oldId: string, updatedData: Partial<User>) => Promise<{ success: boolean; user?: User; error?: string }>;
@@ -409,6 +411,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updateUser(cleanUser);
   };
 
+  const resetAllSimRatingStats = async (): Promise<{ success: boolean; error?: string }> => {
+    const res = await resetAllUsersSimRatingService();
+    if (res.success) {
+      const zeroStats = {
+        races: 0,
+        wins: 0,
+        podiums: 0,
+        poles: 0,
+        fastestLaps: 0,
+        points: 0,
+        dnfs: 0,
+        safetyRating: 'B 3.50',
+        simRating: 3000,
+      };
+      setUsers((prev) =>
+        prev.map((u) => ({
+          ...u,
+          stats: { ...zeroStats },
+        }))
+      );
+      if (currentUser) {
+        setCurrentUser((prev) => (prev ? { ...prev, stats: { ...zeroStats } } : null));
+      }
+    }
+    return res;
+  };
+
   const syncUsers = async () => {
     try {
       const merged = await syncBackendWithFirestore();
@@ -480,6 +509,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         updateUser,
         resetPilotStats,
+        resetAllSimRatingStats,
         syncUsers,
         deleteUserAccountPermanently,
         adminUpdatePilotProfile,

@@ -122,13 +122,61 @@ const removeDeletedChampionshipId = (id: string) => {
   }
 };
 
+const parseStageDateTime = (dateStr?: string, timeStr?: string): number => {
+  if (!dateStr || typeof dateStr !== 'string') return Number.MAX_SAFE_INTEGER;
+  const trimmed = dateStr.trim();
+  let year = 0, month = 0, day = 0;
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    const parts = trimmed.split(/[-T ]/);
+    year = parseInt(parts[0], 10);
+    month = parseInt(parts[1], 10) - 1;
+    day = parseInt(parts[2], 10);
+  } else if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(trimmed)) {
+    const parts = trimmed.split('/');
+    day = parseInt(parts[0], 10);
+    month = parseInt(parts[1], 10) - 1;
+    year = parseInt(parts[2], 10);
+  }
+  let hours = 0, minutes = 0;
+  if (timeStr && typeof timeStr === 'string') {
+    const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})/);
+    if (timeMatch) {
+      hours = parseInt(timeMatch[1], 10);
+      minutes = parseInt(timeMatch[2], 10);
+    }
+  }
+  if (year > 0) {
+    const dt = new Date(year, month, day, hours, minutes);
+    if (!isNaN(dt.getTime())) return dt.getTime();
+  }
+  const fallback = Date.parse(trimmed);
+  return !isNaN(fallback) ? fallback : Number.MAX_SAFE_INTEGER;
+};
+
+const sortStagesChronologically = (stages: any[]): any[] => {
+  if (!Array.isArray(stages)) return [];
+  const copy = [...stages];
+  copy.sort((a, b) => {
+    const tA = parseStageDateTime(a?.date, a?.time);
+    const tB = parseStageDateTime(b?.date, b?.time);
+    if (tA !== tB) return tA - tB;
+    return (a?.roundNumber || 0) - (b?.roundNumber || 0);
+  });
+  return copy.map((st, i) => ({ ...st, roundNumber: i + 1 }));
+};
+
 const readChampionshipsFromFile = (): any[] => {
   try {
     if (fs.existsSync(CHAMPIONSHIPS_FILE)) {
       const data = fs.readFileSync(CHAMPIONSHIPS_FILE, 'utf-8');
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed)) {
-        return parsed;
+        return parsed.map((c: any) => {
+          if (Array.isArray(c.stages)) {
+            c.stages = sortStagesChronologically(c.stages);
+          }
+          return c;
+        });
       }
     }
   } catch (err) {
@@ -405,6 +453,30 @@ const handleUserRegister = (req: any, res: any) => {
 
 app.post('/api/users/register', handleUserRegister);
 app.post('/api/users', handleUserRegister);
+
+// API: Reset all users stats and Sim Rating back to baseline (3000 pts and 0 races/wins/etc.)
+const handleResetAllSimRatingStats = (_req: any, res: any) => {
+  const users = readUsersFromFile();
+  const resetUsers = users.map((u) => ({
+    ...u,
+    stats: {
+      races: 0,
+      wins: 0,
+      podiums: 0,
+      poles: 0,
+      fastestLaps: 0,
+      points: 0,
+      dnfs: 0,
+      safetyRating: 'B 3.50',
+      simRating: 3000,
+    },
+  }));
+  writeUsersToFile(resetUsers);
+  res.json({ success: true, count: resetUsers.length, users: resetUsers });
+};
+
+app.post('/api/users/reset-all-stats', handleResetAllSimRatingStats);
+app.post('/api/sim-rating/reset', handleResetAllSimRatingStats);
 
 // API: Batch sync users (merging any existing user accounts)
 app.post('/api/users/sync', (req, res) => {
@@ -781,7 +853,7 @@ app.delete('/api/users/:id', (req, res) => {
   res.json({ success: true, message: 'Usuário excluído permanentemente de todos os bancos de dados', users: remaining });
 });
 
-// Helper to filter out any deleted registrations from incoming championship
+// Helper to filter out any deleted registrations from incoming championship and sort stages
 const sanitizeChampDeletedRegistrations = (champ: any) => {
   if (!champ) return champ;
   const deletedSet = readDeletedUserIdsAndEmails();
@@ -796,6 +868,9 @@ const sanitizeChampDeletedRegistrations = (champ: any) => {
         (regName && deletedSet.has(regName));
       return !isDeleted;
     });
+  }
+  if (Array.isArray(champ.stages)) {
+    champ.stages = sortStagesChronologically(champ.stages);
   }
   return champ;
 };

@@ -545,6 +545,57 @@ export const syncBackendWithFirestore = async (): Promise<User[]> => {
   return allMergedUsers;
 };
 
+// Master Admin: Reset all pilots Sim Rating and stats back to official default baseline (3.000 pts)
+export const resetAllUsersSimRatingService = async (): Promise<{
+  success: boolean;
+  users?: User[];
+  error?: string;
+}> => {
+  try {
+    // 1. Call backend server to reset data/users.json
+    const res = await fetch('/api/sim-rating/reset', { method: 'POST' });
+    const data = await res.json();
+
+    // 2. Also reset in Firestore for all documents if quota allows
+    if (!isFirestoreQuotaExceeded()) {
+      try {
+        const snap = await getDocs(collection(db, USERS_COLLECTION));
+        const updates = snap.docs.map((d) =>
+          updateDoc(doc(db, USERS_COLLECTION, d.id), {
+            stats: {
+              races: 0,
+              wins: 0,
+              podiums: 0,
+              poles: 0,
+              fastestLaps: 0,
+              points: 0,
+              dnfs: 0,
+              safetyRating: 'B 3.50',
+              simRating: 3000,
+            },
+            updatedAt: serverTimestamp(),
+          }).catch((e) => console.warn('Firestore update single user error:', e))
+        );
+        await Promise.all(updates);
+      } catch (fErr) {
+        handleFirestoreError(fErr);
+        console.warn('Firestore reset warning (backend saved successfully):', fErr);
+      }
+    }
+
+    if (data.users && Array.isArray(data.users)) {
+      try {
+        localStorage.setItem('apexsim_users_db', JSON.stringify(data.users));
+      } catch (_) {}
+    }
+
+    return { success: true, users: data.users };
+  } catch (err: any) {
+    console.error('resetAllUsersSimRatingService error:', err);
+    return { success: false, error: err.message || 'Erro ao resetar ranking Sim Rating.' };
+  }
+};
+
 // Master Admin: Update pilot profile data (Name, ID, Team, Stats, etc.) excluding email & password
 export const adminUpdatePilotProfileService = async (
   oldId: string,

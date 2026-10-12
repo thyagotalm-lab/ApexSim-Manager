@@ -14,6 +14,11 @@ import {
   Sparkles,
   ExternalLink,
   Swords,
+  RotateCcw,
+  CheckCircle2,
+  AlertTriangle,
+  X,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
@@ -37,13 +42,38 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
   onOpenCardModal,
   onOpenH2HModal,
 }) => {
-  const { users, currentUser } = useAuth();
+  const { users, currentUser, resetAllSimRatingStats } = useAuth();
   const { championships } = useChampionships();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTier, setSelectedTier] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'simRating' | 'wins' | 'podiums' | 'races' | 'points'>('simRating');
   const [sortDirection, setSortDirection] = useState<'desc' | 'asc'>('desc');
+
+  // Reset Ranking States
+  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.email?.toLowerCase().trim() === 'thyago.talm@gmail.com';
+
+  const handleConfirmReset = async () => {
+    setIsResetting(true);
+    try {
+      const res = await resetAllSimRatingStats();
+      if (res.success) {
+        setFeedbackMessage('Ranking Sim Rating e estatísticas resetados com sucesso! Todos os pilotos retornaram para o padrão de 3.000 pts.');
+        setIsResetModalOpen(false);
+        setTimeout(() => setFeedbackMessage(null), 6000);
+      } else {
+        alert(res.error || 'Erro ao resetar ranking.');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao processar reset.');
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   // Consolidate pilots list: All registered users with safe stats and authentic profile teams
   const allDrivers: User[] = useMemo(() => {
@@ -130,6 +160,22 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      {/* Success / Feedback Toast Notification */}
+      {feedbackMessage && (
+        <div className="p-4 rounded-xl bg-emerald-950/80 border border-emerald-600/70 text-emerald-200 text-xs flex items-center justify-between gap-3 shadow-xl animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <span className="font-semibold">{feedbackMessage}</span>
+          </div>
+          <button
+            onClick={() => setFeedbackMessage(null)}
+            className="text-emerald-400 hover:text-white p-1 rounded-lg"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Official Sim Rating Header Banner */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-red-950 via-slate-900 to-[#0c121e] border border-red-900/60 p-5 sm:p-7 shadow-2xl">
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-red-600/10 via-transparent to-transparent pointer-events-none" />
@@ -337,6 +383,18 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
             >
               <Swords className="w-3.5 h-3.5 text-amber-400" />
               <span>Comparador H2H</span>
+            </button>
+          )}
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setIsResetModalOpen(true)}
+              className="flex items-center gap-1.5 bg-red-950/80 hover:bg-red-900 border border-red-700/80 hover:border-red-500 text-red-300 px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer whitespace-nowrap shadow-sm text-xs"
+              title="Resetar pontuação e estatísticas do Sim Rating para 3.000 pts"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-red-400" />
+              <span>Resetar Ranking</span>
             </button>
           )}
 
@@ -621,6 +679,73 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Reset Ranking Confirmation Modal */}
+      {isResetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-slate-900 border border-red-900/80 rounded-2xl p-6 shadow-2xl text-left space-y-4">
+            <button
+              onClick={() => !isResetting && setIsResetModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-red-950/80 border border-red-700/80 flex items-center justify-center shrink-0 shadow">
+                <RotateCcw className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Resetar Ranking Sim Rating</h3>
+                <p className="text-xs text-red-400 font-semibold">Operação de Direção da Liga / Master</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-4 space-y-2.5 text-xs text-slate-300">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <p className="leading-relaxed font-medium">
+                  Esta ação irá redefinir todos os <strong>{allDrivers.length} pilotos cadastrados</strong> para o padrão oficial:
+                </p>
+              </div>
+              <ul className="list-disc list-inside space-y-1 text-slate-400 pl-1 text-[11px]">
+                <li>Sim Rating redefinido para a pontuação inicial de <strong className="text-amber-400 font-mono">3.000 pontos</strong></li>
+                <li>Estatísticas de desempenho zeradas: <strong className="text-white">0 corridas, 0 vitórias, 0 pódios, 0 poles e 0 pontos</strong></li>
+                <li>Atualização gravada e sincronizada no Firebase Firestore e no banco local do servidor</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isResetting}
+                onClick={() => setIsResetModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isResetting}
+                onClick={handleConfirmReset}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white text-xs font-bold transition-all cursor-pointer shadow-lg shadow-red-950/50 flex items-center gap-2 disabled:opacity-50"
+              >
+                {isResetting ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Resetando...</span>
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Confirmar Reset Agora</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

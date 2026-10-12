@@ -467,18 +467,20 @@ export const CreateChampionshipModal: React.FC<CreateChampionshipModalProps> = (
       scoringRule,
       defaultRaceDay,
       recurrence: stageRecurrence,
-      initialStages: initialStages.map((s) => ({
-        trackName: s.trackName,
-        trackCountry: s.trackCountry,
-        trackFlag: s.trackFlag,
-        circuitLength: s.circuitLength || '4.500 km',
-        date: s.date,
-        time: s.time || raceTime,
-        format: s.format,
-        weather: 'Pista Seca',
-        hasSprint: s.hasSprint || false,
-        sprintFormat: s.hasSprint ? (s.sprintFormat || 'Corrida Sprint 100km') : undefined,
-      })),
+      initialStages: [...initialStages]
+        .sort((a, b) => (a.date || '').localeCompare(b.date || ''))
+        .map((s) => ({
+          trackName: s.trackName,
+          trackCountry: s.trackCountry,
+          trackFlag: s.trackFlag,
+          circuitLength: s.circuitLength || '4.500 km',
+          date: s.date,
+          time: s.time || raceTime,
+          format: s.format,
+          weather: 'Pista Seca',
+          hasSprint: s.hasSprint || false,
+          sprintFormat: s.hasSprint ? (s.sprintFormat || 'Corrida Sprint 100km') : undefined,
+        })),
     });
 
     onClose();

@@ -172,6 +172,9 @@ export const StageEditorModal: React.FC<StageEditorModalProps> = ({ stage, onClo
                 onChange={(e) => setDate(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500"
               />
+              <span className="text-[10px] text-slate-500 block mt-0.5">
+                A ordem no calendário é automática pela data
+              </span>
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-300 block mb-1">Horário (BRT)</label>
@@ -182,6 +185,9 @@ export const StageEditorModal: React.FC<StageEditorModalProps> = ({ stage, onClo
                 onChange={(e) => setTime(e.target.value)}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-red-500"
               />
+              <span className="text-[10px] text-slate-500 block mt-0.5">
+                Ex: 21:00 BRT
+              </span>
             </div>
           </div>
 

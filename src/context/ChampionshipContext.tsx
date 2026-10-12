@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useMemo } from '
 import { Championship, PenaltyType, RaceProtest, RaceResultItem, RegistrationPilot, StageRound, User } from '../types';
 import { useAuth } from './AuthContext';
 import { addDeletedUserTombstone, isDeletedUserAccount } from '../services/userService';
+import { sortStagesChronologically } from '../utils/stageUtils';
 import {
   subscribeToChampionships,
   saveChampionshipToCloud,
@@ -112,7 +113,10 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const saved = localStorage.getItem('apexsim_championships_db');
       if (saved) {
         let parsed: Championship[] = JSON.parse(saved);
-        parsed = parsed.filter(isRealChampionship);
+        parsed = parsed.filter(isRealChampionship).map((c) => ({
+          ...c,
+          stages: sortStagesChronologically(c.stages),
+        }));
         return parsed;
       }
     } catch (e) {
@@ -137,7 +141,10 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     const unsubscribe = subscribeToChampionships((cloudChamps) => {
       if (Array.isArray(cloudChamps)) {
-        const filtered = cloudChamps.filter(isRealChampionship);
+        const filtered = cloudChamps.filter(isRealChampionship).map((c) => ({
+          ...c,
+          stages: sortStagesChronologically(c.stages),
+        }));
         setChampionships(filtered);
         try {
           localStorage.setItem('apexsim_championships_db', JSON.stringify(filtered));
@@ -169,11 +176,15 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const activeChampionship = useMemo(() => {
     if (championships.length === 0) return null;
-    return (
+    const found =
       championships.find((c) => c.id === activeChampionshipId) ||
       championships[0] ||
-      null
-    );
+      null;
+    if (!found) return null;
+    return {
+      ...found,
+      stages: sortStagesChronologically(found.stages),
+    };
   }, [championships, activeChampionshipId]);
 
   const getLeagueAdmins = (championshipId: string): User[] => {
@@ -290,7 +301,13 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setChampionships((prev) => {
       const idx = prev.findIndex((c) => c.id === championshipId);
       if (idx < 0) return prev;
-      const updated = transform(prev[idx]);
+      let updated = transform(prev[idx]);
+      if (Array.isArray(updated.stages)) {
+        updated = {
+          ...updated,
+          stages: sortStagesChronologically(updated.stages),
+        };
+      }
       saveChampionshipToCloud(updated).catch((err) => console.warn('Cloud champ save error:', err));
       const copy = [...prev];
       copy[idx] = updated;
@@ -302,7 +319,7 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const creatorId = currentUser?.id || 'user_thyago_talm';
     const newId = `champ_${Date.now()}`;
     
-    const stages: StageRound[] = (data.initialStages || []).map((s, index) => ({
+    const rawStages: StageRound[] = (data.initialStages || []).map((s, index) => ({
       id: `stage_${Date.now()}_${index + 1}`,
       roundNumber: index + 1,
       trackName: s.trackName || 'Autódromo de Interlagos',
@@ -315,6 +332,7 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
       weather: s.weather || 'Pista Seca',
       status: index === 0 ? 'Em Breve' : 'Agendada',
     }));
+    const stages = sortStagesChronologically(rawStages);
 
     // Aggregate all admin IDs
     const allAdminIds = Array.from(new Set([creatorId, 'user_thyago_talm', ...(data.adminIds || [])]));
@@ -496,33 +514,35 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const addStage = (championshipId: string, stage: Omit<StageRound, 'id' | 'roundNumber'>) => {
     mutateChampionship(championshipId, (c) => {
-      const roundNumber = c.stages.length + 1;
       const newStage: StageRound = {
         ...stage,
         id: `stage_${Date.now()}`,
-        roundNumber,
+        roundNumber: c.stages.length + 1,
       };
+      const sorted = sortStagesChronologically([...c.stages, newStage]);
       return {
         ...c,
-        stages: [...c.stages, newStage],
+        stages: sorted,
       };
     });
   };
 
   const updateStage = (championshipId: string, stageId: string, stageData: Partial<StageRound>) => {
-    mutateChampionship(championshipId, (c) => ({
-      ...c,
-      stages: c.stages.map((st) => (st.id === stageId ? { ...st, ...stageData } : st)),
-    }));
+    mutateChampionship(championshipId, (c) => {
+      const updatedList = c.stages.map((st) => (st.id === stageId ? { ...st, ...stageData } : st));
+      return {
+        ...c,
+        stages: sortStagesChronologically(updatedList),
+      };
+    });
   };
 
   const deleteStage = (championshipId: string, stageId: string) => {
     mutateChampionship(championshipId, (c) => {
       const filtered = c.stages.filter((st) => st.id !== stageId);
-      const reindexed = filtered.map((st, i) => ({ ...st, roundNumber: i + 1 }));
       return {
         ...c,
-        stages: reindexed,
+        stages: sortStagesChronologically(filtered),
       };
     });
   };
@@ -873,16 +893,21 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
           if (res.hasPole) ratingDelta += 8;
           if (res.hasFastestLap) ratingDelta += 5;
+        } else if (res.status === 'DNS') {
+          // Driver did not start / missed race: no rating delta penalty
+          ratingDelta = 0;
         } else {
           ratingDelta = -18;
         }
         const newSimRating = Math.max(1000, curRating + ratingDelta);
 
+        const didParticipate = res.status !== 'DNS';
+
         updateUser({
           ...driverUser,
           stats: {
             ...driverUser.stats,
-            races: driverUser.stats.races + 1,
+            races: driverUser.stats.races + (didParticipate ? 1 : 0),
             wins: driverUser.stats.wins + (isWinner ? 1 : 0),
             podiums: driverUser.stats.podiums + (isPodium ? 1 : 0),
             poles: driverUser.stats.poles + (res.hasPole ? 1 : 0),
@@ -934,6 +959,8 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
           else if (res.finishPosition <= 5) ratingDelta = 6;
           else if (res.finishPosition <= 8) ratingDelta = 3;
           else ratingDelta = -2;
+        } else if (res.status === 'DNS') {
+          ratingDelta = 0;
         } else {
           ratingDelta = -8;
         }

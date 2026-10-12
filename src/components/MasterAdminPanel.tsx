@@ -25,6 +25,7 @@ import {
   Pencil,
   Table,
   LayoutGrid,
+  RotateCcw,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
@@ -38,7 +39,7 @@ interface MasterAdminPanelProps {
 }
 
 export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateToTab }) => {
-  const { currentUser, users, syncUsers, deleteUserAccountPermanently, adminUpdatePilotProfile } = useAuth();
+  const { currentUser, users, syncUsers, deleteUserAccountPermanently, adminUpdatePilotProfile, resetAllSimRatingStats } = useAuth();
   const { championships, propagatePilotProfileUpdate, purgePilotFromAllChampionships, reloadChampionships } = useChampionships();
 
   // Search & Filters
@@ -53,6 +54,7 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
 
   // Interactive UI states
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isResettingSimRating, setIsResettingSimRating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [detailUser, setDetailUser] = useState<User | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
@@ -235,6 +237,39 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
       });
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  // Handle Reset all Sim Rating
+  const handleResetAllSimRating = async () => {
+    const confirmed = window.confirm(
+      'Tem certeza que deseja resetar o Ranking Sim Rating de todos os pilotos para 3.000 pontos e zerar todas as estatísticas acumuladas?'
+    );
+    if (!confirmed) return;
+    try {
+      setIsResettingSimRating(true);
+      const res = await resetAllSimRatingStats();
+      if (res.success) {
+        await refreshBackendUsers();
+        await syncUsers();
+        setAlertFeedback({
+          type: 'success',
+          message: 'Ranking Sim Rating e estatísticas de todos os pilotos foram resetados com sucesso para 3.000 pts!',
+        });
+        setTimeout(() => setAlertFeedback(null), 5000);
+      } else {
+        setAlertFeedback({
+          type: 'error',
+          message: res.error || 'Erro ao resetar ranking.',
+        });
+      }
+    } catch (err: any) {
+      setAlertFeedback({
+        type: 'error',
+        message: err.message || 'Erro inesperado ao resetar.',
+      });
+    } finally {
+      setIsResettingSimRating(false);
     }
   };
 
@@ -503,6 +538,16 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
 
           {/* Top Actions */}
           <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={handleResetAllSimRating}
+              disabled={isResettingSimRating}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-950/70 hover:bg-red-900/80 text-red-300 border border-red-800/80 hover:border-red-600 text-xs font-semibold transition-all cursor-pointer shadow-md disabled:opacity-50"
+              title="Resetar pontuação e estatísticas do Sim Rating para 3.000 pts"
+            >
+              <RotateCcw className={`w-4 h-4 text-red-400 ${isResettingSimRating ? 'animate-spin' : ''}`} />
+              <span>{isResettingSimRating ? 'Resetando...' : 'Resetar Sim Rating'}</span>
+            </button>
+
             <button
               onClick={handleSync}
               disabled={isSyncing}
