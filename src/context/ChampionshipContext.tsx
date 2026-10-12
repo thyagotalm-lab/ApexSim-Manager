@@ -82,6 +82,7 @@ interface ChampionshipContextType {
   ) => void;
   deleteProtest: (protestId: string) => void;
   voteDriverOfTheDay: (championshipId: string, stageId: string, driverId: string, voterId: string) => void;
+  toggleDriverOfTheDayVoting: (championshipId: string, stageId: string, closed?: boolean) => void;
   closeDriverOfTheDayVoting: (championshipId: string, stageId: string) => void;
   getDriverCommunityTrophies: (driverId: string) => {
     dotdCount: number;
@@ -1192,30 +1193,41 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
         if (currentDotd.votingClosed) return st;
 
-        const previousVote = currentDotd.voterUserIds[voterId];
-        const newVotesByDriver = { ...currentDotd.votesByDriverId };
-        let newTotal = currentDotd.totalVotes;
+        const currentVoters = { ...(currentDotd.voterUserIds || {}) };
+        const currentVotesByDriver = { ...(currentDotd.votesByDriverId || {}) };
+        const previousVote = currentVoters[voterId];
+        let newTotal = typeof currentDotd.totalVotes === 'number' ? currentDotd.totalVotes : 0;
 
+        // If clicking on the already voted driver -> toggle off (cancel vote)
         if (previousVote === driverId) {
-          return st;
-        }
-
-        if (previousVote && newVotesByDriver[previousVote]) {
-          newVotesByDriver[previousVote] = Math.max(0, newVotesByDriver[previousVote] - 1);
+          currentVotesByDriver[driverId] = Math.max(0, (currentVotesByDriver[driverId] || 1) - 1);
+          newTotal = Math.max(0, newTotal - 1);
+          delete currentVoters[voterId];
         } else {
-          newTotal += 1;
+          // If changing vote from another driver
+          if (previousVote && typeof currentVotesByDriver[previousVote] === 'number') {
+            currentVotesByDriver[previousVote] = Math.max(0, currentVotesByDriver[previousVote] - 1);
+          } else {
+            newTotal += 1;
+          }
+          currentVotesByDriver[driverId] = (currentVotesByDriver[driverId] || 0) + 1;
+          currentVoters[voterId] = driverId;
         }
 
-        newVotesByDriver[driverId] = (newVotesByDriver[driverId] || 0) + 1;
-
+        // Determine winner
         let highest = 0;
-        let winDriverId = currentDotd.winnerDriverId || driverId;
-        Object.entries(newVotesByDriver).forEach(([dId, count]) => {
+        let winDriverId = '';
+        Object.entries(currentVotesByDriver).forEach(([dId, count]) => {
           if (count > highest) {
             highest = count;
             winDriverId = dId;
           }
         });
+
+        // Fallback if no votes remain
+        if (!winDriverId && highest === 0) {
+          winDriverId = st.results?.[0]?.driverId || '';
+        }
 
         const winnerDriverObj = st.results?.find((r) => r.driverId === winDriverId);
 
@@ -1226,13 +1238,45 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
             driverOfTheDay: {
               ...currentDotd,
               totalVotes: newTotal,
-              votesByDriverId: newVotesByDriver,
-              voterUserIds: {
-                ...currentDotd.voterUserIds,
-                [voterId]: driverId,
-              },
+              votesByDriverId: currentVotesByDriver,
+              voterUserIds: currentVoters,
               winnerDriverId: winDriverId,
-              winnerDriverName: winnerDriverObj?.driverName || currentDotd.winnerDriverName,
+              winnerDriverName:
+                winnerDriverObj?.driverName || (highest > 0 ? currentDotd.winnerDriverName : 'A definir'),
+              votingClosed: Boolean(currentDotd.votingClosed),
+            },
+          },
+        };
+      }),
+    }));
+  };
+
+  const toggleDriverOfTheDayVoting = (
+    championshipId: string,
+    stageId: string,
+    closed?: boolean
+  ) => {
+    mutateChampionship(championshipId, (champ) => ({
+      ...champ,
+      stages: champ.stages.map((st) => {
+        if (st.id !== stageId) return st;
+        const currentTrophies = st.communityTrophies || {};
+        const currentDotd = currentTrophies.driverOfTheDay || {
+          totalVotes: 0,
+          votesByDriverId: {},
+          voterUserIds: {},
+          votingClosed: false,
+        };
+        const nextClosedState = closed !== undefined ? closed : !currentDotd.votingClosed;
+        return {
+          ...st,
+          communityTrophies: {
+            ...currentTrophies,
+            driverOfTheDay: {
+              ...currentDotd,
+              votesByDriverId: currentDotd.votesByDriverId || {},
+              voterUserIds: currentDotd.voterUserIds || {},
+              votingClosed: nextClosedState,
             },
           },
         };
@@ -1241,26 +1285,7 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const closeDriverOfTheDayVoting = (championshipId: string, stageId: string) => {
-    mutateChampionship(championshipId, (champ) => ({
-      ...champ,
-      stages: champ.stages.map((st) => {
-        if (st.id !== stageId) return st;
-        return {
-          ...st,
-          communityTrophies: {
-            ...(st.communityTrophies || {}),
-            driverOfTheDay: {
-              ...(st.communityTrophies?.driverOfTheDay || {
-                totalVotes: 0,
-                votesByDriverId: {},
-                voterUserIds: {},
-              }),
-              votingClosed: true,
-            },
-          },
-        };
-      }),
-    }));
+    toggleDriverOfTheDayVoting(championshipId, stageId, true);
   };
 
   const getDriverCommunityTrophies = (driverId: string) => {
@@ -1634,6 +1659,7 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
         judgeProtest,
         deleteProtest,
         voteDriverOfTheDay,
+        toggleDriverOfTheDayVoting,
         closeDriverOfTheDayVoting,
         getDriverCommunityTrophies,
         propagatePilotProfileUpdate,

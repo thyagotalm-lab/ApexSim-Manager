@@ -35,7 +35,11 @@ const MainAppContent: React.FC = () => {
   // Modals state
   const [isAdminsModalOpen, setIsAdminsModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [resultsModalConfig, setResultsModalConfig] = useState<{ stage: StageRound; raceType?: 'main' | 'sprint' } | null>(null);
+  const [resultsModalConfig, setResultsModalConfig] = useState<{
+    stage: StageRound;
+    raceType?: 'main' | 'sprint';
+    initialTab?: 'results' | 'dotd';
+  } | null>(null);
   const selectedStageForResults = resultsModalConfig?.stage || null;
   const [selectedStageForEdit, setSelectedStageForEdit] = useState<StageRound | null>(null);
   const [isStageEditorOpen, setIsStageEditorOpen] = useState(false);
@@ -47,7 +51,7 @@ const MainAppContent: React.FC = () => {
   const [driverAForH2H, setDriverAForH2H] = useState<User | null>(null);
   const [driverBForH2H, setDriverBForH2H] = useState<User | null>(null);
 
-  const { setActiveChampionshipId } = useChampionships();
+  const { activeChampionship, setActiveChampionshipId } = useChampionships();
 
   const handleOpenCardModal = (driver?: User) => {
     setSelectedDriverForCard(driver || null);
@@ -81,7 +85,9 @@ const MainAppContent: React.FC = () => {
         {activeTab === 'overview' && (
           <ChampionshipOverview
             onNavigateToTab={(tab) => setActiveTab(tab)}
-            onOpenResultsModal={(stage) => setResultsModalConfig({ stage, raceType: 'main' })}
+            onOpenResultsModal={(stage, raceType, initialTab) =>
+              setResultsModalConfig({ stage, raceType: raceType || 'main', initialTab: initialTab || 'results' })
+            }
           />
         )}
         {activeTab === 'standings-drivers' && (
@@ -93,7 +99,9 @@ const MainAppContent: React.FC = () => {
         {activeTab === 'standings-teams' && <ConstructorStandingsTable />}
         {activeTab === 'calendar' && (
           <CalendarStages
-            onOpenResultsModal={(stage, raceType) => setResultsModalConfig({ stage, raceType: raceType || 'main' })}
+            onOpenResultsModal={(stage, raceType, initialTab) =>
+              setResultsModalConfig({ stage, raceType: raceType || 'main', initialTab: initialTab || 'results' })
+            }
             onOpenStageEditor={(stage) => {
               setSelectedStageForEdit(stage || null);
               setIsStageEditorOpen(true);
@@ -136,7 +144,7 @@ const MainAppContent: React.FC = () => {
               setSelectedStageForEdit(stage || null);
               setIsStageEditorOpen(true);
             }}
-            onOpenResultsModal={(stage) => setResultsModalConfig({ stage, raceType: 'main' })}
+            onOpenResultsModal={(stage) => setResultsModalConfig({ stage, raceType: 'main', initialTab: 'results' })}
             onNavigateToTab={(tab) => setActiveTab(tab)}
           />
         )}
@@ -150,8 +158,12 @@ const MainAppContent: React.FC = () => {
 
       {resultsModalConfig && (
         <RaceResultsModal
-          stage={resultsModalConfig.stage}
+          stage={
+            activeChampionship?.stages.find((s) => s.id === resultsModalConfig.stage.id) ||
+            resultsModalConfig.stage
+          }
           initialRaceType={resultsModalConfig.raceType || 'main'}
+          initialTab={resultsModalConfig.initialTab || 'results'}
           onClose={() => setResultsModalConfig(null)}
         />
       )}

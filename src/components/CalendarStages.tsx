@@ -9,7 +9,7 @@ import { StewardsProtestsModal } from './StewardsProtestsModal';
 import { sortStagesChronologically, formatStageDateDisplay } from '../utils/stageUtils';
 
 interface CalendarStagesProps {
-  onOpenResultsModal: (stage: StageRound, raceType?: 'main' | 'sprint') => void;
+  onOpenResultsModal: (stage: StageRound, raceType?: 'main' | 'sprint', initialTab?: 'results' | 'dotd') => void;
   onOpenStageEditor: (stage?: StageRound) => void;
 }
 
@@ -298,10 +298,15 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
                       {isCompleted && (
                         <>
                           {stage.communityTrophies?.driverOfTheDay?.winnerDriverName && (
-                            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/40 border border-amber-800/50 text-[11px] text-amber-300 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => onOpenResultsModal(stage, 'main', 'dotd')}
+                              className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/40 hover:bg-amber-900/60 border border-amber-800/50 text-[11px] text-amber-300 shrink-0 cursor-pointer transition-colors"
+                              title="Abrir votação e troféus de Piloto do Dia"
+                            >
                               <Trophy className="w-3 h-3 text-amber-400 shrink-0" />
                               <span className="truncate">DotD: <strong>{stage.communityTrophies.driverOfTheDay.winnerDriverName}</strong></span>
-                            </div>
+                            </button>
                           )}
 
                           <button

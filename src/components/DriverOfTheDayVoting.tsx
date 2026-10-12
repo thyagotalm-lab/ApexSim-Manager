@@ -27,16 +27,24 @@ export const DriverOfTheDayVoting: React.FC<DriverOfTheDayVotingProps> = ({
   onOpenDriverCard,
 }) => {
   const { currentUser } = useAuth();
-  const { activeChampionship, voteDriverOfTheDay, closeDriverOfTheDayVoting, isUserLeagueAdmin } =
-    useChampionships();
+  const {
+    activeChampionship,
+    voteDriverOfTheDay,
+    toggleDriverOfTheDayVoting,
+    isUserLeagueAdmin,
+  } = useChampionships();
 
   const [voteSuccess, setVoteSuccess] = useState<string | null>(null);
 
   if (!activeChampionship) return null;
 
+  // Dynamically resolve the live stage from activeChampionship to ensure reactivity
+  const currentStage =
+    activeChampionship.stages.find((s) => s.id === stage?.id) || stage;
+
   const isAdmin = isUserLeagueAdmin(activeChampionship.id, currentUser?.id);
-  const results = stage.results || [];
-  const trophies = stage.communityTrophies || {};
+  const results = currentStage.results || [];
+  const trophies = currentStage.communityTrophies || {};
   const dotd = trophies.driverOfTheDay || {
     totalVotes: 0,
     votesByDriverId: {},
@@ -44,36 +52,60 @@ export const DriverOfTheDayVoting: React.FC<DriverOfTheDayVotingProps> = ({
     votingClosed: false,
   };
 
-  const currentVoterId = currentUser?.id || 'guest_voter';
-  const userCurrentVote = dotd.voterUserIds[currentVoterId];
+  const dotdVotesByDriver = dotd.votesByDriverId || {};
+  const dotdVoters = dotd.voterUserIds || {};
+  const dotdTotalVotes = typeof dotd.totalVotes === 'number' ? dotd.totalVotes : 0;
 
-  const handleVote = (driverId: string) => {
-    voteDriverOfTheDay(activeChampionship.id, stage.id, driverId, currentVoterId);
-    setVoteSuccess(driverId);
-    setTimeout(() => setVoteSuccess(null), 1800);
-  };
-
-  const handleToggleCloseVoting = () => {
-    if (dotd.votingClosed) {
-      // Reopen
-      voteDriverOfTheDay(activeChampionship.id, stage.id, dotd.winnerDriverId || results[0]?.driverId || '', 'dummy');
-    } else {
-      closeDriverOfTheDayVoting(activeChampionship.id, stage.id);
+  // Retrieve or generate a persistent voter ID
+  const getDeviceVoterId = (): string => {
+    try {
+      let id = localStorage.getItem('apexsim_voter_client_id');
+      if (!id) {
+        id = `voter_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        localStorage.setItem('apexsim_voter_client_id', id);
+      }
+      return id;
+    } catch {
+      return 'guest_voter';
     }
   };
 
+  const currentVoterId = currentUser?.id || getDeviceVoterId();
+  const userCurrentVote = dotdVoters[currentVoterId];
+
+  const handleVote = (driverId: string) => {
+    if (!activeChampionship || !currentStage) return;
+    if (dotd.votingClosed) return;
+
+    const isRemoving = userCurrentVote === driverId;
+    voteDriverOfTheDay(activeChampionship.id, currentStage.id, driverId, currentVoterId);
+    setVoteSuccess(isRemoving ? `removed_${driverId}` : driverId);
+    setTimeout(() => setVoteSuccess(null), 2500);
+  };
+
+  const handleToggleCloseVoting = () => {
+    toggleDriverOfTheDayVoting(activeChampionship.id, currentStage.id, !dotd.votingClosed);
+  };
+
   // Find Trophy Winners
-  const dotdWinner = results.find((r) => r.driverId === dotd.winnerDriverId) || results[0];
-  const mostOvertakesDriver = results.find((r) => r.driverId === trophies.mostOvertakesDriverId);
-  const fastestLapDriver = results.find((r) => r.driverId === (stage.fastestLapDriverId || trophies.fastestLapDriverId));
+  const dotdWinner =
+    results.find((r) => r.driverId === dotd.winnerDriverId) || results[0];
+  const mostOvertakesDriver = results.find(
+    (r) => r.driverId === trophies.mostOvertakesDriverId
+  );
+  const fastestLapDriver = results.find(
+    (r) =>
+      r.driverId ===
+      (currentStage.fastestLapDriverId || trophies.fastestLapDriverId)
+  );
   const cleanDriver = results.find((r) => r.driverId === trophies.cleanDriverId);
 
   // Sort drivers by vote count descending
   const sortedByVotes = [...results].sort((a, b) => {
-    const votesA = dotd.votesByDriverId[a.driverId] || 0;
-    const votesB = dotd.votesByDriverId[b.driverId] || 0;
+    const votesA = dotdVotesByDriver[a.driverId] || 0;
+    const votesB = dotdVotesByDriver[b.driverId] || 0;
     if (votesB !== votesA) return votesB - votesA;
-    return a.finishPosition - b.finishPosition;
+    return (a.finishPosition || 99) - (b.finishPosition || 99);
   });
 
   return (
@@ -90,7 +122,7 @@ export const DriverOfTheDayVoting: React.FC<DriverOfTheDayVotingProps> = ({
                 Piloto do Dia (DotD)
               </span>
               <span className="text-[10px] text-amber-300 font-mono font-bold">
-                {dotd.totalVotes} votos
+                {dotdTotalVotes} {dotdTotalVotes === 1 ? 'voto' : 'votos'}
               </span>
             </div>
 
@@ -107,8 +139,8 @@ export const DriverOfTheDayVoting: React.FC<DriverOfTheDayVotingProps> = ({
           <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
             <span className="text-slate-400">Votação da Comunidade</span>
             <span className="text-amber-400 font-bold">
-              {dotdWinner && dotd.totalVotes > 0
-                ? `${Math.round(((dotd.votesByDriverId[dotdWinner.driverId] || 0) / dotd.totalVotes) * 100)}% dos votos`
+              {dotdWinner && dotdTotalVotes > 0
+                ? `${Math.round(((dotdVotesByDriver[dotdWinner.driverId] || 0) / dotdTotalVotes) * 100)}% dos votos`
                 : '100%'}
             </span>
           </div>
@@ -214,7 +246,7 @@ export const DriverOfTheDayVoting: React.FC<DriverOfTheDayVotingProps> = ({
           <div>
             <div className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>Votação Oficial: Piloto do Dia ({stage.trackName})</span>
+              <span>Votação Oficial: Piloto do Dia ({currentStage.trackName})</span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
               Escolha o competidor que realizou a corrida mais marcante, agressiva ou brilhante.
@@ -246,17 +278,52 @@ export const DriverOfTheDayVoting: React.FC<DriverOfTheDayVotingProps> = ({
 
         {/* Voting Drivers Grid */}
         <div className="p-4 sm:p-5 space-y-3">
+          {voteSuccess && (
+            <div className="p-3 rounded-xl bg-emerald-950/80 border border-emerald-500/50 flex items-center justify-between text-xs text-emerald-300 shadow-md">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-medium">
+                  {voteSuccess.startsWith('removed_')
+                    ? 'Seu voto foi cancelado com sucesso.'
+                    : 'Seu voto foi computado com sucesso!'}
+                </span>
+              </div>
+              <span className="text-[10px] text-emerald-400/80 font-mono hidden sm:inline">
+                Sincronizado
+              </span>
+            </div>
+          )}
+
+          {userCurrentVote && (
+            <div className="p-2.5 px-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-[11px] text-slate-300">
+              <span className="flex items-center gap-1.5">
+                <UserCheck className="w-3.5 h-3.5 text-red-400" />
+                <span>
+                  Você votou no piloto{' '}
+                  <strong className="text-white">
+                    {results.find((r) => r.driverId === userCurrentVote)?.driverName || 'selecionado'}
+                  </strong>
+                  .
+                </span>
+              </span>
+              <span className="text-slate-500 text-[10px] hidden sm:inline">
+                Clique no botão de outro piloto para trocar seu voto ou no mesmo para cancelar
+              </span>
+            </div>
+          )}
+
           {sortedByVotes.length === 0 ? (
             <div className="text-center py-8 text-xs text-slate-500">
               Nenhum piloto com resultado registrado para votação nesta etapa.
             </div>
           ) : (
             sortedByVotes.map((driver) => {
-              const driverVotes = dotd.votesByDriverId[driver.driverId] || 0;
+              const driverVotes = dotdVotesByDriver[driver.driverId] || 0;
               const votePercentage =
-                dotd.totalVotes > 0 ? Math.round((driverVotes / dotd.totalVotes) * 100) : 0;
+                dotdTotalVotes > 0 ? Math.round((driverVotes / dotdTotalVotes) * 100) : 0;
               const hasVotedForThis = userCurrentVote === driver.driverId;
               const isWinner = dotd.winnerDriverId === driver.driverId && driverVotes > 0;
+              const isJustVoted = voteSuccess === driver.driverId;
 
               return (
                 <div
@@ -265,7 +332,7 @@ export const DriverOfTheDayVoting: React.FC<DriverOfTheDayVotingProps> = ({
                     isWinner
                       ? 'bg-amber-950/20 border-amber-500/40 ring-1 ring-amber-500/20'
                       : hasVotedForThis
-                      ? 'bg-slate-900 border-red-500/50'
+                      ? 'bg-slate-900 border-red-500/50 shadow-md shadow-red-950/20'
                       : 'bg-slate-950/60 border-slate-800/80 hover:border-slate-700'
                   }`}
                 >
@@ -333,7 +400,9 @@ export const DriverOfTheDayVoting: React.FC<DriverOfTheDayVotingProps> = ({
                             className={`h-full transition-all duration-500 rounded-full ${
                               isWinner
                                 ? 'bg-gradient-to-r from-amber-500 to-amber-300'
-                                : 'bg-red-500'
+                                : hasVotedForThis
+                                ? 'bg-red-500'
+                                : 'bg-red-600/80'
                             }`}
                             style={{ width: `${votePercentage}%` }}
                           />
@@ -341,18 +410,40 @@ export const DriverOfTheDayVoting: React.FC<DriverOfTheDayVotingProps> = ({
                       </div>
 
                       {/* Vote Button */}
-                      {!dotd.votingClosed && (
+                      {!dotd.votingClosed ? (
                         <button
                           type="button"
                           onClick={() => handleVote(driver.driverId)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                             hasVotedForThis
-                              ? 'bg-red-600 text-white shadow-md shadow-red-950'
-                              : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                              ? 'bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-950 ring-2 ring-red-400/50'
+                              : isJustVoted
+                              ? 'bg-emerald-600 text-white scale-105'
+                              : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 active:scale-95'
                           }`}
+                          title={hasVotedForThis ? 'Clique para remover seu voto deste piloto' : 'Clique para votar neste piloto'}
                         >
-                          {hasVotedForThis ? 'Votado ✓' : 'Votar'}
+                          {hasVotedForThis ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                              <span>Votado ✓</span>
+                            </>
+                          ) : isJustVoted ? (
+                            <>
+                              <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                              <span>Gravado!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Votar</span>
+                            </>
+                          )}
                         </button>
+                      ) : (
+                        <span className="text-[11px] text-slate-500 italic px-2 py-1">
+                          Votação Encerrada
+                        </span>
                       )}
                     </div>
                   </div>

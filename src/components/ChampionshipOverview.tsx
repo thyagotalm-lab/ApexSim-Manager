@@ -34,7 +34,7 @@ import { NavTab } from './FooterNavigation';
 interface ChampionshipOverviewProps {
   onNavigateToTab: (tab: NavTab) => void;
   onOpenStageEditor?: (stage: any) => void;
-  onOpenResultsModal?: (stage: any) => void;
+  onOpenResultsModal?: (stage: any, raceType?: 'main' | 'sprint', initialTab?: 'results' | 'dotd') => void;
 }
 
 export const ChampionshipOverview: React.FC<ChampionshipOverviewProps> = ({
@@ -548,7 +548,7 @@ export const ChampionshipOverview: React.FC<ChampionshipOverviewProps> = ({
               type="button"
               onClick={() => {
                 if (lastCompletedStage && onOpenResultsModal) {
-                  onOpenResultsModal(lastCompletedStage);
+                  onOpenResultsModal(lastCompletedStage, 'main', 'dotd');
                 } else {
                   onNavigateToTab('calendar');
                 }

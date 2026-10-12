@@ -28,18 +28,24 @@ import { DriverOfTheDayVoting } from './DriverOfTheDayVoting';
 interface RaceResultsModalProps {
   stage: StageRound | null;
   initialRaceType?: 'main' | 'sprint';
+  initialTab?: 'results' | 'dotd';
   onClose: () => void;
 }
 
 export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({
-  stage,
+  stage: propStage,
   initialRaceType = 'main',
+  initialTab = 'results',
   onClose,
 }) => {
   const { currentUser, users } = useAuth();
   const { activeChampionship, recordRaceResults, recordSprintResults, isUserLeagueAdmin } =
     useChampionships();
   const { sendNotification } = useNotifications();
+
+  // Dynamically resolve current stage from activeChampionship to ensure real-time reactivity
+  const stage =
+    activeChampionship?.stages.find((s) => s.id === propStage?.id) || propStage;
 
   if (!stage || !activeChampionship) return null;
 
@@ -51,7 +57,7 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({
   );
 
   // Modal active primary tab: 'results' | 'dotd'
-  const [modalTab, setModalTab] = useState<'results' | 'dotd'>('results');
+  const [modalTab, setModalTab] = useState<'results' | 'dotd'>(initialTab);
 
   // Active step inside results: 'grid' (Grid de Largada) or 'finish' (Grid de Chegada)
   const [gridStep, setGridStep] = useState<'grid' | 'finish'>('grid');
