@@ -184,7 +184,7 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
             return (
               <div
                 key={stage.id}
-                className={`p-4 sm:p-5 rounded-xl border transition-all ${
+                className={`p-3.5 sm:p-5 rounded-xl border transition-all overflow-hidden ${
                   stage.status === 'Em Breve'
                     ? 'bg-gradient-to-r from-red-950/20 via-slate-900/80 to-slate-900 border-red-800/60 shadow-md shadow-red-950/20'
                     : isCompleted
@@ -194,49 +194,49 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
               >
                 <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                   {/* Left: Round Number & Track Details */}
-                  <div className="flex items-start gap-3.5">
-                    <div className="flex flex-col items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-slate-950 border border-slate-800 font-mono-numbers shrink-0">
-                      <span className="text-[10px] text-slate-500 uppercase font-semibold">Etapa</span>
-                      <span className="text-xl sm:text-2xl font-black text-red-500">{stage.roundNumber}</span>
+                  <div className="flex items-start gap-3 sm:gap-3.5 min-w-0">
+                    <div className="flex flex-col items-center justify-center w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-slate-950 border border-slate-800 font-mono-numbers shrink-0">
+                      <span className="text-[9px] sm:text-[10px] text-slate-500 uppercase font-semibold">Etapa</span>
+                      <span className="text-lg sm:text-2xl font-black text-red-500">{stage.roundNumber}</span>
                     </div>
 
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
                         <CountryFlag flag={stage.trackFlag} country={stage.trackCountry} size="md" />
                         <span className="text-xs text-slate-400 font-medium">{stage.trackCountry}</span>
                         <span>·</span>
                         {getStatusBadge(stage.status)}
                         {stage.hasSprint && (
-                          <span className="inline-flex items-center gap-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          <span className="inline-flex items-center gap-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
                             <Zap className="w-3 h-3 text-amber-400" />
                             <span>Corrida Sprint</span>
                           </span>
                         )}
                       </div>
 
-                      <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                      <h3 className="text-base sm:text-lg font-bold text-white tracking-tight break-words">
                         {stage.trackName}
                       </h3>
 
                       <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-slate-400 mt-1 font-mono tabular-nums">
                         <span className="flex items-center gap-1.5 text-slate-300 font-sans">
-                          <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                          {formatStageDateDisplay(stage.date)}
+                          <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          <span>{formatStageDateDisplay(stage.date)}</span>
                         </span>
                         <span className="text-slate-600">·</span>
                         <span className="flex items-center gap-1.5 text-slate-300">
-                          <Clock className="w-3.5 h-3.5 text-slate-500" />
-                          {stage.time}
+                          <Clock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          <span>{stage.time}</span>
                         </span>
                         <span className="text-slate-600">·</span>
                         <span className="flex items-center gap-1.5 text-slate-300">
-                          <MapPin className="w-3.5 h-3.5 text-slate-500" />
-                          {stage.circuitLength}
+                          <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          <span>{stage.circuitLength}</span>
                         </span>
                         <span className="text-slate-600">·</span>
                         <span className="flex items-center gap-1.5 text-slate-300 font-sans">
                           {getWeatherIcon(stage.weather)}
-                          {stage.weather}
+                          <span>{stage.weather}</span>
                         </span>
                       </div>
 
@@ -255,80 +255,86 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
                   </div>
 
                   {/* Right: Quick results overview & Admin action buttons */}
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 self-end lg:self-center">
+                  <div className="w-full lg:w-auto flex flex-col sm:flex-row items-stretch sm:items-center justify-between lg:justify-end gap-3 min-w-0">
                     {/* Race & Sprint Winners Card */}
                     {((isCompleted && winner) || (stage.hasSprint && sprintWinner)) && (
-                      <div className="bg-slate-950/90 border border-slate-800 p-2.5 rounded-lg text-xs min-w-[210px] border-l-2 border-l-amber-400 shadow-sm space-y-1.5">
+                      <div className="w-full sm:w-auto sm:min-w-[210px] max-w-full bg-slate-950/90 border border-slate-800 p-2.5 rounded-lg text-xs border-l-2 border-l-amber-400 shadow-sm space-y-1.5 overflow-hidden">
                         {isCompleted && winner && (
-                          <div>
-                            <div className="flex items-center gap-1.5 text-amber-400 font-semibold mb-0.5">
-                              <Award className="w-3.5 h-3.5" />
-                              <span>Vencedor: {users.find((u) => u.id === winner.driverId)?.name || winner.driverName}</span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 text-amber-400 font-semibold mb-0.5 truncate">
+                              <Award className="w-3.5 h-3.5 shrink-0" />
+                              <span className="truncate">Vencedor: {users.find((u) => u.id === winner.driverId)?.name || winner.driverName}</span>
                             </div>
-                            <div className="text-[11px] text-slate-400 flex items-center justify-between">
-                              <span>Equipe: <strong className="text-slate-300 font-medium">{winner.teamName}</strong></span>
-                              <span className="text-red-400 font-mono font-bold">#{winner.number}</span>
+                            <div className="text-[11px] text-slate-400 flex items-center justify-between gap-2">
+                              <span className="truncate">Equipe: <strong className="text-slate-300 font-medium">{winner.teamName}</strong></span>
+                              <span className="text-red-400 font-mono font-bold shrink-0">#{winner.number}</span>
                             </div>
                             {stage.fastestLapTime && (
-                              <div className="text-[10px] text-purple-400 mt-1 font-mono tabular-nums font-semibold flex items-center gap-1 pt-1 border-t border-slate-800/50">
-                                <Zap className="w-3 h-3 text-purple-400" />
-                                <span>Volta Rápida: {stage.fastestLapTime}</span>
+                              <div className="text-[10px] text-purple-400 mt-1 font-mono tabular-nums font-semibold flex items-center gap-1 pt-1 border-t border-slate-800/50 truncate">
+                                <Zap className="w-3 h-3 text-purple-400 shrink-0" />
+                                <span className="truncate">Volta Rápida: {stage.fastestLapTime}</span>
                               </div>
                             )}
                           </div>
                         )}
                         {stage.hasSprint && sprintWinner && (
-                          <div className={isCompleted && winner ? 'pt-1.5 border-t border-slate-800/60' : ''}>
-                            <div className="flex items-center gap-1.5 text-amber-300 font-semibold text-[11px]">
-                              <Zap className="w-3 h-3 text-amber-400" />
-                              <span>Venc. Sprint: {users.find((u) => u.id === sprintWinner.driverId)?.name || sprintWinner.driverName}</span>
+                          <div className={`min-w-0 ${isCompleted && winner ? 'pt-1.5 border-t border-slate-800/60' : ''}`}>
+                            <div className="flex items-center gap-1.5 text-amber-300 font-semibold text-[11px] truncate">
+                              <Zap className="w-3 h-3 text-amber-400 shrink-0" />
+                              <span className="truncate">Venc. Sprint: {users.find((u) => u.id === sprintWinner.driverId)?.name || sprintWinner.driverName}</span>
                             </div>
-                            <div className="text-[10px] text-slate-400 flex items-center justify-between mt-0.5">
-                              <span>{sprintWinner.teamName}</span>
-                              <span className="text-amber-400 font-mono font-bold">#{sprintWinner.number}</span>
+                            <div className="text-[10px] text-slate-400 flex items-center justify-between gap-2 mt-0.5">
+                              <span className="truncate">{sprintWinner.teamName}</span>
+                              <span className="text-amber-400 font-mono font-bold shrink-0">#{sprintWinner.number}</span>
                             </div>
                           </div>
                         )}
                       </div>
                     )}
 
-                    <div className="flex items-center gap-2">
+                    {/* Actions Row */}
+                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap w-full sm:w-auto">
                       {/* View Details / Results Modal */}
                       {isCompleted && (
                         <>
                           {stage.communityTrophies?.driverOfTheDay?.winnerDriverName && (
-                            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/40 border border-amber-800/50 text-[11px] text-amber-300">
-                              <Trophy className="w-3 h-3 text-amber-400" />
-                              <span>DotD: <strong>{stage.communityTrophies.driverOfTheDay.winnerDriverName}</strong></span>
+                            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/40 border border-amber-800/50 text-[11px] text-amber-300 shrink-0">
+                              <Trophy className="w-3 h-3 text-amber-400 shrink-0" />
+                              <span className="truncate">DotD: <strong>{stage.communityTrophies.driverOfTheDay.winnerDriverName}</strong></span>
                             </div>
                           )}
 
                           <button
+                            type="button"
                             onClick={() => onOpenResultsModal(stage, 'main')}
-                            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-colors flex items-center gap-1 cursor-pointer"
+                            className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap"
                           >
-                            <span>Resultados & DotD</span>
-                            <ChevronRight className="w-3.5 h-3.5" />
+                            <span>Resultados</span>
+                            <span className="hidden sm:inline">& DotD</span>
+                            <ChevronRight className="w-3.5 h-3.5 shrink-0" />
                           </button>
 
                           {stage.hasSprint && hasSprintResults && (
                             <button
+                              type="button"
                               onClick={() => onOpenResultsModal(stage, 'sprint')}
-                              className="px-3 py-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900/80 border border-amber-800/80 text-amber-200 text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                              className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900/80 border border-amber-800/80 text-amber-200 text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap"
                               title="Visualizar classificação da Corrida Sprint"
                             >
-                              <Zap className="w-3.5 h-3.5 text-amber-400" />
+                              <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                               <span>Ver Sprint</span>
                             </button>
                           )}
 
                           <button
+                            type="button"
                             onClick={() => setProtestStage(stage)}
-                            className="px-3 py-1.5 rounded-lg bg-red-950/70 hover:bg-red-900 border border-red-800/80 text-red-200 text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
+                            className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-red-950/70 hover:bg-red-900 border border-red-800/80 text-red-200 text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                             title="Protocolar denúncia ou protesto sobre incidente nesta etapa"
                           >
-                            <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
-                            <span>Protestar Incidente</span>
+                            <ShieldAlert className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                            <span>Protestar</span>
+                            <span className="hidden sm:inline">Incidente</span>
                           </button>
                         </>
                       )}
@@ -336,11 +342,12 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
                       {/* If race is not completed but sprint has results, viewer can view sprint results */}
                       {!isCompleted && stage.hasSprint && hasSprintResults && (
                         <button
+                          type="button"
                           onClick={() => onOpenResultsModal(stage, 'sprint')}
-                          className="px-3 py-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900/80 border border-amber-800/80 text-amber-200 text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                          className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900/80 border border-amber-800/80 text-amber-200 text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap"
                           title="Visualizar classificação da Corrida Sprint"
                         >
-                          <Zap className="w-3.5 h-3.5 text-amber-400" />
+                          <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                           <span>Ver Sprint</span>
                         </button>
                       )}
@@ -351,40 +358,47 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
                           {/* Dedicated Sprint Launch Button when stage has sprint */}
                           {stage.hasSprint && (
                             <button
+                              type="button"
                               onClick={() => onOpenResultsModal(stage, 'sprint')}
-                              className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer border border-amber-400"
+                              className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs shadow-sm transition-all flex items-center gap-1.5 cursor-pointer border border-amber-400 whitespace-nowrap"
                               title="Lançar ou homologar resultados específicos da Corrida Sprint seguindo a pontuação da liga"
                             >
-                              <Zap className="w-3.5 h-3.5 fill-current" />
+                              <Zap className="w-3.5 h-3.5 fill-current shrink-0" />
                               <span>{hasSprintResults ? 'Editar Sprint' : 'Lançar Sprint'}</span>
                             </button>
                           )}
 
                           {/* Main Race Launch Button */}
                           <button
+                            type="button"
                             onClick={() => onOpenResultsModal(stage, 'main')}
-                            className="px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                            className="px-2.5 sm:px-3.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                             title="Lançar ou editar classificação da corrida principal"
                           >
-                            <Award className="w-3.5 h-3.5" />
-                            <span>{isCompleted ? 'Editar Resultados' : 'Lançar Resultados'}</span>
+                            <Award className="w-3.5 h-3.5 shrink-0" />
+                            <span>{isCompleted ? 'Editar' : 'Lançar'}</span>
+                            <span className="hidden sm:inline">Resultados</span>
                           </button>
 
-                          <button
-                            onClick={() => onOpenStageEditor(stage)}
-                            className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                            title="Editar informações da etapa"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1 ml-auto sm:ml-0">
+                            <button
+                              type="button"
+                              onClick={() => onOpenStageEditor(stage)}
+                              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                              title="Editar informações da etapa"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
 
-                          <button
-                            onClick={() => setStageToDelete(stage)}
-                            className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
-                            title="Excluir etapa do calendário"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() => setStageToDelete(stage)}
+                              className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors cursor-pointer"
+                              title="Excluir etapa do calendário"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </>
                       )}
                     </div>

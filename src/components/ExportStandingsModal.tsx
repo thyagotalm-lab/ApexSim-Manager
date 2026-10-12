@@ -78,8 +78,13 @@ export const ExportStandingsModal: React.FC<ExportStandingsModalProps> = ({
     // Dimensions:
     // 18:9 -> 2160 x 1080 px (Ultra HD Widescreen)
     // 9:18 -> 1080 x 2160 px (Ultra HD Mobile / Stories)
+    const listTotal = isDriver ? driverStandings.length : constructorStandings.length;
+    const remainingCountEst = Math.max(0, listTotal - 1);
     const width = aspectRatio === '18:9' ? 2160 : 1080;
-    const height = aspectRatio === '18:9' ? 1080 : 2160;
+    const height =
+      aspectRatio === '18:9'
+        ? 1080
+        : Math.max(2160, 420 + remainingCountEst * 54 + 90);
 
     canvas.width = width;
     canvas.height = height;
@@ -205,11 +210,15 @@ export const ExportStandingsModal: React.FC<ExportStandingsModalProps> = ({
       ctx.lineTo(width - marginX, topY + 86);
       ctx.stroke();
 
-      // Data preparation: Left Column (1-10) and Right Column (11-20 or 1-10 for constructors)
-      const list = isDriver ? driverStandings.slice(0, 20) : constructorStandings.slice(0, 14);
+      // Data preparation: Left Column and Right Column for all drivers / constructors
+      const list = isDriver ? driverStandings : constructorStandings;
       const colWidth = (width - marginX * 2 - 50) / 2;
       const startContentY = topY + 130;
-      const itemsPerCol = isDriver ? 10 : Math.ceil(list.length / 2);
+      const itemsPerCol = Math.max(1, Math.ceil(list.length / 2));
+      const footerY = height - 42;
+      const availableContentH = footerY - 20 - startContentY;
+      const rowHeight = Math.min(65, Math.max(38, Math.floor(availableContentH / itemsPerCol)));
+      const hScale = Math.min(1, rowHeight / 65);
 
       // Column Header Bars (F1 Broadcast Style)
       const drawF1ColHeader = (x: number) => {
@@ -232,13 +241,12 @@ export const ExportStandingsModal: React.FC<ExportStandingsModalProps> = ({
         drawF1ColHeader(marginX + colWidth + 50);
       }
 
-      const rowHeight = 65;
-
       list.forEach((item, index) => {
         const colIndex = index < itemsPerCol ? 0 : 1;
         const rowIndex = index < itemsPerCol ? index : index - itemsPerCol;
         const colX = marginX + colIndex * (colWidth + 50);
         const rowY = startContentY + rowIndex * rowHeight;
+        const rowBoxH = rowHeight - (hScale < 0.8 ? 4 : 6);
 
         const isP1 = item.rank === 1 && item.totalPoints > 0;
         const isPointsPaying = item.rank <= 10;
@@ -250,25 +258,26 @@ export const ExportStandingsModal: React.FC<ExportStandingsModalProps> = ({
           ? '#1e1e27'
           : '#181822';
 
-        ctx.fillRect(colX, rowY, colWidth, rowHeight - 6);
+        ctx.fillRect(colX, rowY, colWidth, rowBoxH);
 
         // Leader highlight border
         if (isP1) {
           ctx.strokeStyle = '#e10600';
           ctx.lineWidth = 1.5;
-          ctx.strokeRect(colX, rowY, colWidth, rowHeight - 6);
+          ctx.strokeRect(colX, rowY, colWidth, rowBoxH);
         }
 
         // 1. Position Block (F1 Angled Chevron / Block)
-        const posBoxW = 46;
+        const posBoxW = Math.round(46 * Math.max(0.75, hScale));
         ctx.fillStyle = isP1 ? '#e10600' : isPointsPaying ? '#292936' : '#191921';
-        ctx.fillRect(colX, rowY, posBoxW, rowHeight - 6);
+        ctx.fillRect(colX, rowY, posBoxW, rowBoxH);
 
-        ctx.font = 'italic 900 22px system-ui, -apple-system, sans-serif';
+        const posFontSize = Math.round(22 * Math.max(0.75, hScale));
+        ctx.font = `italic 900 ${posFontSize}px system-ui, -apple-system, sans-serif`;
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(String(item.rank), colX + posBoxW / 2, rowY + (rowHeight - 6) / 2);
+        ctx.fillText(String(item.rank), colX + posBoxW / 2, rowY + rowBoxH / 2);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
 
@@ -279,92 +288,112 @@ export const ExportStandingsModal: React.FC<ExportStandingsModalProps> = ({
         const teamColor = getTeamColor(teamName);
 
         ctx.fillStyle = teamColor;
-        ctx.fillRect(colX + posBoxW + 4, rowY + 3, 6, rowHeight - 12);
+        ctx.fillRect(colX + posBoxW + 4, rowY + 3, 6, Math.max(8, rowBoxH - 6));
 
         // 3. Driver Name / Constructor Name
-        const nameX = colX + posBoxW + 20;
+        const nameX = colX + posBoxW + 18;
 
         if (isDriver) {
           const dItem = item as DriverStanding;
           const { first, last } = formatF1Name(dItem.driverName);
 
-          // F1 Signature: First name regular, SURNAME extra-bold
-          ctx.font = '400 18px system-ui, sans-serif';
+          const firstFontSize = Math.round(18 * Math.max(0.72, hScale));
+          const lastFontSize = Math.round(21 * Math.max(0.72, hScale));
+          const subFontSize = Math.round(13 * Math.max(0.7, hScale));
+
+          // First name regular, SURNAME extra-bold
+          ctx.font = `400 ${firstFontSize}px system-ui, sans-serif`;
           ctx.fillStyle = '#b5b5be';
-          ctx.fillText(first, nameX, rowY + 36);
+          const nameY = rowY + Math.round(rowBoxH * 0.54);
+          ctx.fillText(first, nameX, nameY);
 
           const firstWidth = first ? ctx.measureText(first + ' ').width : 0;
-          ctx.font = 'italic 900 21px system-ui, -apple-system, sans-serif';
+          ctx.font = `italic 900 ${lastFontSize}px system-ui, -apple-system, sans-serif`;
           ctx.fillStyle = '#ffffff';
-          ctx.fillText(last, nameX + firstWidth, rowY + 36);
+          ctx.fillText(last, nameX + firstWidth, nameY);
 
-          // Car Number in red/team color
-          ctx.font = 'italic 800 13px monospace';
-          ctx.fillStyle = '#e10600';
-          ctx.fillText(`#${dItem.number}`, nameX, rowY + 52);
-
-          // Team Code Badge
+          // Car Number & Team
           const isRes = dItem.isReserve || dItem.teamName.toLowerCase().includes('reserva');
           const teamLabel = isRes ? 'RESERVA' : dItem.teamName.toUpperCase();
           const teamCode = isRes ? 'RES' : getTeamCode(dItem.teamName, championship.simulator);
-          ctx.fillStyle = isRes ? '#f59e0b' : '#71717a';
-          ctx.fillText(` · ${teamLabel}`, nameX + 32, rowY + 52);
+
+          if (rowBoxH >= 44) {
+            const subY = rowY + Math.round(rowBoxH * 0.84);
+            ctx.font = `italic 800 ${subFontSize}px monospace`;
+            ctx.fillStyle = '#e10600';
+            ctx.fillText(`#${dItem.number}`, nameX, subY);
+
+            ctx.fillStyle = isRes ? '#f59e0b' : '#71717a';
+            ctx.fillText(` · ${teamLabel}`, nameX + 32, subY);
+          }
 
           // Team Code Pill
           ctx.fillStyle = isRes ? '#451a03' : '#272733';
-          ctx.fillRect(colX + colWidth - 250, rowY + 16, 52, 26);
+          const pillH = Math.max(20, Math.round(26 * hScale));
+          const pillY = rowY + (rowBoxH - pillH) / 2;
+          ctx.fillRect(colX + colWidth - 250, pillY, 52, pillH);
           ctx.font = 'italic 900 13px monospace';
           ctx.fillStyle = '#ffd700';
           ctx.textAlign = 'center';
-          ctx.fillText(teamCode, colX + colWidth - 224, rowY + 34);
+          ctx.textBaseline = 'middle';
+          ctx.fillText(teamCode, colX + colWidth - 224, pillY + pillH / 2);
           ctx.textAlign = 'left';
+          ctx.textBaseline = 'alphabetic';
         } else {
           const cItem = item as ConstructorStandingItem;
           const teamCode = getTeamCode(cItem.teamName, championship.simulator);
 
-          ctx.font = 'italic 900 22px system-ui, -apple-system, sans-serif';
+          const teamFontSize = Math.round(22 * Math.max(0.72, hScale));
+          ctx.font = `italic 900 ${teamFontSize}px system-ui, -apple-system, sans-serif`;
           ctx.fillStyle = '#ffffff';
-          ctx.fillText(cItem.teamName.toUpperCase(), nameX, rowY + 35);
+          const nameY = rowY + Math.round(rowBoxH * 0.54);
+          ctx.fillText(cItem.teamName.toUpperCase(), nameX, nameY);
 
-          // Team code & drivers
-          ctx.font = '13px monospace';
-          ctx.fillStyle = '#ffd700';
-          ctx.fillText(`[${teamCode}]`, nameX, rowY + 52);
+          if (rowBoxH >= 44) {
+            const subY = rowY + Math.round(rowBoxH * 0.84);
+            ctx.font = '13px monospace';
+            ctx.fillStyle = '#ffd700';
+            ctx.fillText(`[${teamCode}]`, nameX, subY);
 
-          ctx.fillStyle = '#a1a1aa';
-          const driverListStr = cItem.driverNames.slice(0, 2).join(' · ') || 'Sem pilotos';
-          ctx.fillText(` · ${driverListStr.toUpperCase()}`, nameX + 54, rowY + 52);
+            ctx.fillStyle = '#a1a1aa';
+            const driverListStr = cItem.driverNames.slice(0, 2).join(' · ') || 'Sem pilotos';
+            ctx.fillText(` · ${driverListStr.toUpperCase()}`, nameX + 54, subY);
+          }
 
           // Wins indicator
           ctx.font = 'bold 13px monospace';
           ctx.fillStyle = '#949498';
-          ctx.fillText(`${item.wins} VIT · ${item.podiums} PÓD`, colX + colWidth - 250, rowY + 36);
+          ctx.fillText(`${item.wins} VIT · ${item.podiums} PÓD`, colX + colWidth - 250, rowY + rowBoxH / 2 + 5);
         }
 
-        // 4. Points Box (Official F1 TV Dark Inset with High Contrast Numbers)
-        const ptsBoxW = 65;
+        // 4. Points Box
+        const ptsBoxW = Math.round(65 * Math.max(0.75, hScale));
         const ptsBoxX = colX + colWidth - 110;
+        const ptsBoxH = Math.max(22, rowBoxH - 16);
+        const ptsBoxY = rowY + (rowBoxH - ptsBoxH) / 2;
         ctx.fillStyle = isP1 ? '#e10600' : '#14141c';
-        ctx.fillRect(ptsBoxX, rowY + 8, ptsBoxW, rowHeight - 22);
+        ctx.fillRect(ptsBoxX, ptsBoxY, ptsBoxW, ptsBoxH);
 
-        ctx.font = 'italic 900 22px "Arial Black", Impact, sans-serif';
+        const ptsFontSize = Math.round(22 * Math.max(0.72, hScale));
+        ctx.font = `italic 900 ${ptsFontSize}px "Arial Black", Impact, sans-serif`;
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(String(item.totalPoints), ptsBoxX + ptsBoxW / 2, rowY + (rowHeight - 6) / 2);
+        ctx.fillText(String(item.totalPoints), ptsBoxX + ptsBoxW / 2, rowY + rowBoxH / 2);
         ctx.textBaseline = 'alphabetic';
 
         // 5. Gap Column
         ctx.font = 'italic 800 13px monospace';
         ctx.textAlign = 'right';
+        ctx.textBaseline = 'middle';
         ctx.fillStyle = isP1 ? '#ffd700' : '#949498';
         const gapText = item.gap === 'Líder' ? 'LEAD' : item.gap.replace('pts', '').trim();
-        ctx.fillText(gapText, colX + colWidth - 14, rowY + 36);
+        ctx.fillText(gapText, colX + colWidth - 14, rowY + rowBoxH / 2);
         ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
       });
 
       // Bottom F1 Broadcast Footer Bar
-      const footerY = height - 42;
       ctx.strokeStyle = '#e10600';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -446,11 +475,16 @@ export const ExportStandingsModal: React.FC<ExportStandingsModalProps> = ({
       curY += 28;
 
       // 1. Leader Spotlight Card (P1)
-      const list = isDriver ? driverStandings.slice(0, 14) : constructorStandings.slice(0, 12);
+      const list = isDriver ? driverStandings : constructorStandings;
       const p1 = list.find((d) => d.rank === 1);
+      const remainingList = list.filter((i) => i.rank !== 1);
+      const remCount = remainingList.length;
+
+      // Adjust P1 card height & gap based on remaining drivers count
+      const p1CardHeight = remCount > 20 ? 125 : remCount > 14 ? 138 : 160;
+      const gapAfterP1 = remCount > 20 ? 10 : remCount > 14 ? 14 : 22;
 
       if (p1) {
-        const p1CardHeight = 160;
         const p1TeamName = isDriver
           ? (p1 as DriverStanding).teamName
           : (p1 as ConstructorStandingItem).teamName;
@@ -469,85 +503,103 @@ export const ExportStandingsModal: React.FC<ExportStandingsModalProps> = ({
         ctx.fillRect(marginX, curY + 8, 12, p1CardHeight - 8);
 
         // Pos 1 Badge
-        const posSize = 75;
+        const posSize = p1CardHeight >= 150 ? 75 : 62;
+        const posBadgeY = curY + (p1CardHeight - posSize) / 2 + 4;
         ctx.fillStyle = '#e10600';
-        ctx.fillRect(marginX + 24, curY + 24, posSize, posSize);
+        ctx.fillRect(marginX + 24, posBadgeY, posSize, posSize);
 
-        ctx.font = 'italic 900 48px "Arial Black", Impact, sans-serif';
+        const posFont = p1CardHeight >= 150 ? 48 : 40;
+        ctx.font = `italic 900 ${posFont}px "Arial Black", Impact, sans-serif`;
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('1', marginX + 24 + posSize / 2, curY + 24 + posSize / 2 + 2);
+        ctx.fillText('1', marginX + 24 + posSize / 2, posBadgeY + posSize / 2 + 2);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
 
         // Tag: CHAMPIONSHIP LEADER
+        const tagY = curY + (p1CardHeight >= 150 ? 44 : 36);
         ctx.font = 'italic 900 16px monospace';
         ctx.fillStyle = '#ffd700';
-        ctx.fillText('★ CHAMPIONSHIP LEADER', marginX + 118, curY + 44);
+        ctx.fillText('★ CHAMPIONSHIP LEADER', marginX + 118, tagY);
 
         // Name
         const nameX = marginX + 118;
+        const nameY = curY + (p1CardHeight >= 150 ? 80 : 70);
+        const subY = curY + (p1CardHeight >= 150 ? 114 : 98);
+
         if (isDriver) {
           const { first, last } = formatF1Name((p1 as DriverStanding).driverName);
-          ctx.font = '400 26px system-ui, sans-serif';
+          const firstFont = p1CardHeight >= 150 ? 26 : 22;
+          const lastFont = p1CardHeight >= 150 ? 34 : 28;
+
+          ctx.font = `400 ${firstFont}px system-ui, sans-serif`;
           ctx.fillStyle = '#b5b5be';
-          ctx.fillText(first, nameX, curY + 80);
+          ctx.fillText(first, nameX, nameY);
 
           const fW = first ? ctx.measureText(first + ' ').width : 0;
-          ctx.font = 'italic 900 34px system-ui, -apple-system, sans-serif';
+          ctx.font = `italic 900 ${lastFont}px system-ui, -apple-system, sans-serif`;
           ctx.fillStyle = '#ffffff';
-          ctx.fillText(last, nameX + fW, curY + 80);
+          ctx.fillText(last, nameX + fW, nameY);
 
           // Number & Team Code
           const p1Code = getTeamCode(p1TeamName, championship.simulator);
-          ctx.font = 'italic 900 18px monospace';
+          ctx.font = 'italic 900 17px monospace';
           ctx.fillStyle = '#e10600';
-          ctx.fillText(`#${(p1 as DriverStanding).number}`, nameX, curY + 114);
+          ctx.fillText(`#${(p1 as DriverStanding).number}`, nameX, subY);
 
           ctx.fillStyle = '#949498';
-          ctx.fillText(` · ${p1TeamName.toUpperCase()} [${p1Code}]`, nameX + 45, curY + 114);
+          ctx.fillText(` · ${p1TeamName.toUpperCase()} [${p1Code}]`, nameX + 45, subY);
         } else {
-          ctx.font = 'italic 900 36px system-ui, -apple-system, sans-serif';
+          const cFont = p1CardHeight >= 150 ? 36 : 28;
+          ctx.font = `italic 900 ${cFont}px system-ui, -apple-system, sans-serif`;
           ctx.fillStyle = '#ffffff';
-          ctx.fillText(p1TeamName.toUpperCase(), nameX, curY + 82);
+          ctx.fillText(p1TeamName.toUpperCase(), nameX, nameY);
 
           const p1Code = getTeamCode(p1TeamName, championship.simulator);
-          ctx.font = 'italic 900 18px monospace';
+          ctx.font = 'italic 900 17px monospace';
           ctx.fillStyle = '#ffd700';
-          ctx.fillText(`[${p1Code}] · ${p1.wins} VITÓRIAS · ${p1.podiums} PÓDIOS`, nameX, curY + 114);
+          ctx.fillText(`[${p1Code}] · ${p1.wins} VITÓRIAS · ${p1.podiums} PÓDIOS`, nameX, subY);
         }
 
         // Points Box on Right
         const ptsBoxW = 120;
         const ptsBoxX = width - marginX - ptsBoxW - 20;
+        const ptsBoxH = p1CardHeight >= 150 ? 75 : 62;
+        const ptsBoxY = curY + (p1CardHeight - ptsBoxH) / 2 + 4;
         ctx.fillStyle = '#121219';
-        ctx.fillRect(ptsBoxX, curY + 28, ptsBoxW, 75);
+        ctx.fillRect(ptsBoxX, ptsBoxY, ptsBoxW, ptsBoxH);
 
-        ctx.font = 'italic 900 46px "Arial Black", Impact, sans-serif';
+        const ptsFont = p1CardHeight >= 150 ? 46 : 38;
+        ctx.font = `italic 900 ${ptsFont}px "Arial Black", Impact, sans-serif`;
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(String(p1.totalPoints), ptsBoxX + ptsBoxW / 2, curY + 65);
+        ctx.fillText(String(p1.totalPoints), ptsBoxX + ptsBoxW / 2, ptsBoxY + ptsBoxH / 2 - 8);
 
         ctx.font = 'bold 13px monospace';
         ctx.fillStyle = '#e10600';
-        ctx.fillText('PTS', ptsBoxX + ptsBoxW / 2, curY + 92);
+        ctx.fillText('PTS', ptsBoxX + ptsBoxW / 2, ptsBoxY + ptsBoxH / 2 + 18);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
 
-        curY += p1CardHeight + 24;
+        curY += p1CardHeight + gapAfterP1;
       }
 
-      // 2. Rows 2 to 14 (Official F1 TV Horizontal Strips)
-      const remainingList = list.filter((i) => i.rank !== 1);
-      const rowH = 88;
+      // 2. All remaining drivers/constructors in adaptive horizontal strips
+      const footerY = height - 50;
+      const availableSpaceForRows = footerY - 25 - curY;
+      const rowH = remCount > 0
+        ? Math.min(88, Math.max(46, Math.floor(availableSpaceForRows / remCount)))
+        : 88;
+      const scale = Math.min(1, rowH / 88);
 
       remainingList.forEach((item, idx) => {
         const rowY = curY + idx * rowH;
         const isPointsPaying = item.rank <= 10;
         const isP2 = item.rank === 2;
         const isP3 = item.rank === 3;
+        const rowBoxH = rowH - (scale < 0.8 ? 5 : 8);
 
         // Container strip
         ctx.fillStyle = isP2
@@ -558,10 +610,10 @@ export const ExportStandingsModal: React.FC<ExportStandingsModalProps> = ({
           ? '#181822'
           : '#14141c';
 
-        ctx.fillRect(marginX, rowY, width - marginX * 2, rowH - 8);
+        ctx.fillRect(marginX, rowY, width - marginX * 2, rowBoxH);
 
         // Position Block
-        const posW = 56;
+        const posW = Math.round(56 * Math.max(0.72, scale));
         ctx.fillStyle = isP2
           ? '#2b2b3a'
           : isP3
@@ -570,13 +622,14 @@ export const ExportStandingsModal: React.FC<ExportStandingsModalProps> = ({
           ? '#222230'
           : '#181822';
 
-        ctx.fillRect(marginX, rowY, posW, rowH - 8);
+        ctx.fillRect(marginX, rowY, posW, rowBoxH);
 
-        ctx.font = 'italic 900 28px system-ui, -apple-system, sans-serif';
+        const posFontSize = Math.round(28 * Math.max(0.72, scale));
+        ctx.font = `italic 900 ${posFontSize}px system-ui, -apple-system, sans-serif`;
         ctx.fillStyle = isP2 ? '#e2e8f0' : isP3 ? '#f59e0b' : '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(String(item.rank), marginX + posW / 2, rowY + (rowH - 8) / 2);
+        ctx.fillText(String(item.rank), marginX + posW / 2, rowY + rowBoxH / 2);
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
 
@@ -587,76 +640,100 @@ export const ExportStandingsModal: React.FC<ExportStandingsModalProps> = ({
         const teamColor = getTeamColor(teamName);
 
         ctx.fillStyle = teamColor;
-        ctx.fillRect(marginX + posW + 4, rowY + 4, 6, rowH - 16);
+        ctx.fillRect(marginX + posW + 4, rowY + 3, 6, Math.max(8, rowBoxH - 6));
 
         // Name
-        const nameX = marginX + posW + 24;
+        const nameX = marginX + posW + Math.round(20 * Math.max(0.7, scale));
         if (isDriver) {
           const dItem = item as DriverStanding;
           const { first, last } = formatF1Name(dItem.driverName);
 
-          ctx.font = '400 22px system-ui, sans-serif';
+          const firstFontSize = Math.round(22 * Math.max(0.72, scale));
+          const lastFontSize = Math.round(26 * Math.max(0.72, scale));
+          const subFontSize = Math.round(15 * Math.max(0.7, scale));
+
+          const nameLineY = rowY + Math.round(rowBoxH * 0.45);
+          ctx.font = `400 ${firstFontSize}px system-ui, sans-serif`;
           ctx.fillStyle = '#b5b5be';
-          ctx.fillText(first, nameX, rowY + 36);
+          ctx.fillText(first, nameX, nameLineY);
 
           const fW = first ? ctx.measureText(first + ' ').width : 0;
-          ctx.font = 'italic 900 26px system-ui, -apple-system, sans-serif';
+          ctx.font = `italic 900 ${lastFontSize}px system-ui, -apple-system, sans-serif`;
           ctx.fillStyle = '#ffffff';
-          ctx.fillText(last, nameX + fW, rowY + 36);
+          ctx.fillText(last, nameX + fW, nameLineY);
 
           // Subline: Number & Team Code
-          const teamCode = getTeamCode(dItem.teamName, championship.simulator);
-          ctx.font = 'italic 800 15px monospace';
-          ctx.fillStyle = '#e10600';
-          ctx.fillText(`#${dItem.number}`, nameX, rowY + 62);
+          const isRes = dItem.isReserve || dItem.teamName.toLowerCase().includes('reserva');
+          const teamLabel = isRes ? 'RESERVA' : dItem.teamName.toUpperCase();
+          const teamCode = isRes ? 'RES' : getTeamCode(dItem.teamName, championship.simulator);
 
-          ctx.fillStyle = '#a1a1aa';
-          ctx.fillText(` · ${dItem.teamName.toUpperCase()} [${teamCode}]`, nameX + 38, rowY + 62);
+          if (rowBoxH >= 42) {
+            const subLineY = rowY + Math.round(rowBoxH * 0.77);
+            ctx.font = `italic 800 ${subFontSize}px monospace`;
+            ctx.fillStyle = '#e10600';
+            ctx.fillText(`#${dItem.number}`, nameX, subLineY);
+
+            ctx.fillStyle = isRes ? '#f59e0b' : '#a1a1aa';
+            ctx.fillText(` · ${teamLabel} [${teamCode}]`, nameX + 38, subLineY);
+          }
         } else {
           const cItem = item as ConstructorStandingItem;
           const teamCode = getTeamCode(cItem.teamName, championship.simulator);
 
-          ctx.font = 'italic 900 26px system-ui, -apple-system, sans-serif';
+          const teamFontSize = Math.round(26 * Math.max(0.72, scale));
+          ctx.font = `italic 900 ${teamFontSize}px system-ui, -apple-system, sans-serif`;
           ctx.fillStyle = '#ffffff';
-          ctx.fillText(cItem.teamName.toUpperCase(), nameX, rowY + 36);
+          const nameLineY = rowY + Math.round(rowBoxH * 0.45);
+          ctx.fillText(cItem.teamName.toUpperCase(), nameX, nameLineY);
 
-          ctx.font = '15px monospace';
-          ctx.fillStyle = '#ffd700';
-          ctx.fillText(`[${teamCode}]`, nameX, rowY + 62);
+          if (rowBoxH >= 42) {
+            const subLineY = rowY + Math.round(rowBoxH * 0.77);
+            const subFontSize = Math.round(15 * Math.max(0.7, scale));
+            ctx.font = `${subFontSize}px monospace`;
+            ctx.fillStyle = '#ffd700';
+            ctx.fillText(`[${teamCode}]`, nameX, subLineY);
 
-          ctx.fillStyle = '#949498';
-          const driverListStr = cItem.driverNames.slice(0, 2).join(' · ') || 'Sem pilotos';
-          ctx.fillText(` · ${driverListStr.toUpperCase()}`, nameX + 54, rowY + 62);
+            ctx.fillStyle = '#949498';
+            const driverListStr = cItem.driverNames.slice(0, 2).join(' · ') || 'Sem pilotos';
+            ctx.fillText(` · ${driverListStr.toUpperCase()}`, nameX + 54, subLineY);
+          }
         }
 
         // Points Box
-        const pBoxW = 90;
+        const pBoxW = Math.round(90 * Math.max(0.72, scale));
         const pBoxX = width - marginX - pBoxW - 14;
+        const pBoxH = Math.max(26, rowBoxH - (scale < 0.8 ? 14 : 24));
+        const pBoxY = rowY + (rowBoxH - pBoxH) / 2;
         ctx.fillStyle = '#101018';
-        ctx.fillRect(pBoxX, rowY + 12, pBoxW, rowH - 32);
+        ctx.fillRect(pBoxX, pBoxY, pBoxW, pBoxH);
 
-        ctx.font = 'italic 900 30px "Arial Black", Impact, sans-serif';
+        const ptsFontSize = Math.round(30 * Math.max(0.7, scale));
+        ctx.font = `italic 900 ${ptsFontSize}px "Arial Black", Impact, sans-serif`;
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(String(item.totalPoints), pBoxX + pBoxW / 2, rowY + (rowH - 8) / 2 - 4);
+        ctx.fillText(String(item.totalPoints), pBoxX + pBoxW / 2, rowY + rowBoxH / 2 - (scale >= 0.78 ? 4 : 0));
 
-        ctx.font = 'italic 800 11px monospace';
-        ctx.fillStyle = '#949498';
-        ctx.fillText('PTS', pBoxX + pBoxW / 2, rowY + (rowH - 8) / 2 + 15);
+        if (scale >= 0.78) {
+          ctx.font = `italic 800 ${Math.max(10, Math.round(11 * scale))}px monospace`;
+          ctx.fillStyle = '#949498';
+          ctx.fillText('PTS', pBoxX + pBoxW / 2, rowY + rowBoxH / 2 + 14);
+        }
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
 
         // Gap
-        ctx.font = 'italic 800 14px monospace';
+        const gapFontSize = Math.round(14 * Math.max(0.72, scale));
+        ctx.font = `italic 800 ${gapFontSize}px monospace`;
         ctx.fillStyle = '#a1a1aa';
         ctx.textAlign = 'right';
-        ctx.fillText(item.gap, pBoxX - 16, rowY + 44);
+        ctx.textBaseline = 'middle';
+        ctx.fillText(item.gap, pBoxX - 16, rowY + rowBoxH / 2);
         ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
       });
 
       // Bottom F1 Stories Footer
-      const footerY = height - 50;
       ctx.strokeStyle = '#e10600';
       ctx.lineWidth = 2;
       ctx.beginPath();
