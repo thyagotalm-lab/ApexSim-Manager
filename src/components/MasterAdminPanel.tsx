@@ -33,6 +33,7 @@ import { User } from '../types';
 import { getSimRatingTier } from '../utils/simRating';
 import { CountryFlag } from './CountryFlag';
 import { isFakeMockUser, isDeletedUserAccount } from '../services/userService';
+import { RelationalDbModal } from './RelationalDbModal';
 
 interface MasterAdminPanelProps {
   onNavigateToTab?: (tab: any) => void;
@@ -62,6 +63,7 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteStepText, setDeleteStepText] = useState('');
   const [alertFeedback, setAlertFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isRelationalDbModalOpen, setIsRelationalDbModalOpen] = useState(false);
 
   // Pilot Profile Editing States
   const [userToEdit, setUserToEdit] = useState<User | null>(null);
@@ -539,6 +541,15 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
           {/* Top Actions */}
           <div className="flex items-center gap-3 flex-wrap">
             <button
+              onClick={() => setIsRelationalDbModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-red-900/90 to-red-950 hover:from-red-800 hover:to-red-900 text-white border border-red-700/70 hover:border-red-500 text-xs font-bold transition-all cursor-pointer shadow-lg shadow-red-950/60"
+              title="Abrir Inspetor do Banco de Dados Relacional Estruturado (SQLite / ACID) e Migração ETL"
+            >
+              <Database className="w-4 h-4 text-red-400" />
+              <span>Banco Relacional SQL</span>
+            </button>
+
+            <button
               onClick={handleResetAllSimRating}
               disabled={isResettingSimRating}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-950/70 hover:bg-red-900/80 text-red-300 border border-red-800/80 hover:border-red-600 text-xs font-semibold transition-all cursor-pointer shadow-md disabled:opacity-50"
@@ -637,12 +648,23 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
               <span className="text-slate-300">Backend API:</span>
               <span className="text-emerald-400 flex items-center gap-1 font-mono text-[11px]">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Ativo (/api/users)
+                Ativo (/api)
               </span>
+            </div>
+            <div className="flex items-center justify-between text-xs font-semibold">
+              <span className="text-slate-300">SQLite (ACID):</span>
+              <button
+                onClick={() => setIsRelationalDbModalOpen(true)}
+                className="text-red-400 hover:text-red-300 flex items-center gap-1 font-mono text-[11px] underline cursor-pointer"
+                title="Abrir Inspetor Relacional SQL"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Normalizado (Ver SQL)
+              </button>
             </div>
           </div>
           <div className="mt-2 text-[10px] text-slate-500">
-            Two-way sync bidirecional
+            Sync bidirecional em tempo real
           </div>
         </div>
       </div>
@@ -1754,6 +1776,11 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
             </div>
           </div>
         </div>
+      )}
+
+      {/* Relational Database Inspector & ETL Migration Modal */}
+      {isRelationalDbModalOpen && (
+        <RelationalDbModal onClose={() => setIsRelationalDbModalOpen(false)} />
       )}
     </div>
   );

@@ -532,6 +532,22 @@ export const DriverStandingsTable: React.FC<DriverStandingsTableProps> = ({
                                   (driver.driverId && u.id === driver.driverId) ||
                                   u.name.toLowerCase().trim() === driver.driverName.toLowerCase().trim()
                               );
+                              const actualRacesCount = completedStages.filter((st) =>
+                                st.results?.some(
+                                  (r) =>
+                                    ((r.driverId && r.driverId === driver.driverId) ||
+                                      (r.driverName && r.driverName.toLowerCase().trim() === driver.driverName.toLowerCase().trim())) &&
+                                    r.status !== 'DNS'
+                                )
+                              ).length;
+                              const actualQualisCount = completedStages.filter((st) =>
+                                st.results?.some(
+                                  (r) =>
+                                    ((r.driverId && r.driverId === driver.driverId) ||
+                                      (r.driverName && r.driverName.toLowerCase().trim() === driver.driverName.toLowerCase().trim())) &&
+                                    ((typeof r.gridPosition === 'number' && r.gridPosition > 0) || Boolean(r.hasPole))
+                                )
+                              ).length;
                               onOpenCardModal(
                                 pilotUser || {
                                   id: driver.driverId || `pilot_${driver.driverName}`,
@@ -544,7 +560,8 @@ export const DriverStandingsTable: React.FC<DriverStandingsTableProps> = ({
                                   teamTag: '',
                                   administeredLeagueIds: [],
                                   stats: {
-                                    races: completedStages.length,
+                                    qualifications: actualQualisCount,
+                                    races: actualRacesCount,
                                     wins: driver.wins || 0,
                                     podiums: driver.podiums || 0,
                                     poles: 0,

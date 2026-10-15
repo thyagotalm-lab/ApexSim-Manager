@@ -27,6 +27,7 @@ import { CreateChampionshipModal } from './components/CreateChampionshipModal';
 import { StageEditorModal } from './components/StageEditorModal';
 import { DriverCardModal } from './components/DriverCardModal';
 import { HeadToHeadModal } from './components/HeadToHeadModal';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { StageRound, User } from './types';
 
 const MainAppContent: React.FC = () => {
@@ -229,6 +230,9 @@ const MainAppContent: React.FC = () => {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
       />
+
+      {/* Offline connectivity indicator */}
+      <OfflineIndicator />
     </div>
   );
 };

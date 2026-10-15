@@ -30,6 +30,7 @@ import { PdfRulesDownloadCard } from './PdfRulesDownloadCard';
 import { TitleSimulatorModal } from './TitleSimulatorModal';
 import { getTeamCode, getTeamsBySimulator } from '../data/f1Teams';
 import { NavTab } from './FooterNavigation';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface ChampionshipOverviewProps {
   onNavigateToTab: (tab: NavTab) => void;
@@ -265,6 +266,9 @@ export const ChampionshipOverview: React.FC<ChampionshipOverviewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* PWA & Push Installable Banner */}
+      <PWAInstallButton variant="banner" />
 
       {/* Official League Rules & PDF Download Section */}
       {(activeChampionship.rulesPdfUrl || activeChampionship.rulesDoc) && (

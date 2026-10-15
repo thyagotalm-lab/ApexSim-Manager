@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { useNotifications } from '../context/NotificationContext';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 import { AppNotification } from '../types';
 
 interface NotificationBellProps {
@@ -21,6 +22,8 @@ interface NotificationBellProps {
 
 export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigateToTab }) => {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
+  const { isSupported, permission, isGranted, requestPermission, testPushNotification } = usePushNotifications();
+  const [pushFeedback, setPushFeedback] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState<'all' | 'unread' | 'results' | 'stewards'>('all');
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -158,6 +161,75 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigateTo
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
+          </div>
+
+          {/* Push Notification Integration Bar */}
+          <div className="p-3 bg-slate-900/90 border-b border-slate-800 text-xs">
+            {permission === 'granted' ? (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>Notificações Push Ativas</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const success = await testPushNotification();
+                      if (success) {
+                        setPushFeedback('Notificação de teste enviada!');
+                      } else {
+                        setPushFeedback('Disparado no navegador');
+                      }
+                      setTimeout(() => setPushFeedback(null), 3500);
+                    }}
+                    className="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium transition-colors cursor-pointer"
+                  >
+                    Testar Push
+                  </button>
+                </div>
+                {pushFeedback && (
+                  <p className="text-[10px] text-emerald-300 bg-emerald-950/60 border border-emerald-800/60 px-2 py-1 rounded">
+                    ✓ {pushFeedback}
+                  </p>
+                )}
+              </div>
+            ) : permission === 'denied' ? (
+              <div className="text-[11px] text-amber-300/90 bg-amber-950/40 border border-amber-800/40 p-2 rounded-lg">
+                <p className="font-semibold">⚠️ Notificações bloqueadas no navegador</p>
+                <p className="text-[10px] text-amber-200/70 mt-0.5 leading-tight">
+                  Para receber alertas de corridas e comissários, libere a permissão no ícone de cadeado na barra de endereços.
+                </p>
+              </div>
+            ) : isSupported ? (
+              <div className="space-y-2 bg-red-950/30 border border-red-800/40 p-2.5 rounded-xl">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h5 className="font-bold text-white text-[11px] flex items-center gap-1">
+                      <span>⚡ Ativar Notificações Push</span>
+                    </h5>
+                    <p className="text-[10px] text-slate-300 mt-0.5 leading-snug">
+                      Receba alertas no celular ou PC quando resultados de corridas ou julgamentos de comissários forem publicados.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const status = await requestPermission();
+                    if (status === 'granted') {
+                      await testPushNotification();
+                      setPushFeedback('Notificações ativadas com sucesso!');
+                      setTimeout(() => setPushFeedback(null), 3500);
+                    }
+                  }}
+                  className="w-full py-1.5 px-3 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-[11px] shadow-sm transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Bell className="w-3 h-3" />
+                  <span>Permitir Notificações no Dispositivo</span>
+                </button>
+              </div>
+            ) : null}
           </div>
 
           {/* Quick Filters */}

@@ -3,6 +3,7 @@ import { ChevronDown, PlusCircle, LogIn, LogOut, Gamepad2, Shield, Zap } from 'l
 import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
 import { NotificationBell } from './NotificationBell';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface TopBarProps {
   onOpenCreateModal: () => void;
@@ -78,6 +79,9 @@ export const TopBar: React.FC<TopBarProps> = ({
 
         {/* Center/Right: User Profile & Actions */}
         <div className="flex items-center gap-2 sm:gap-2.5">
+          {/* In-App PWA Install Button */}
+          <PWAInstallButton variant="header" />
+
           {/* Internal Notification Bell */}
           <NotificationBell onNavigateToTab={onNavigateToTab} />
 

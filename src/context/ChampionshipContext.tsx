@@ -10,6 +10,7 @@ import {
   isRealChampionship,
   syncBackendWithFirestoreChampionships,
 } from '../services/championshipService';
+import { computePilotStatsFromChampionships } from '../utils/driverStats';
 
 export const MAX_CHAMPIONSHIPS_PER_PILOT = 5;
 
@@ -114,11 +115,16 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const saved = localStorage.getItem('apexsim_championships_db');
       if (saved) {
         let parsed: Championship[] = JSON.parse(saved);
-        parsed = parsed.filter(isRealChampionship).map((c) => ({
-          ...c,
-          stages: sortStagesChronologically(c.stages),
-        }));
-        return parsed;
+        const map = new Map<string, Championship>();
+        parsed.filter(isRealChampionship).forEach((c) => {
+          if (!map.has(c.id)) {
+            map.set(c.id, {
+              ...c,
+              stages: sortStagesChronologically(c.stages),
+            });
+          }
+        });
+        return Array.from(map.values());
       }
     } catch (e) {
       console.error(e);
@@ -142,10 +148,16 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     const unsubscribe = subscribeToChampionships((cloudChamps) => {
       if (Array.isArray(cloudChamps)) {
-        const filtered = cloudChamps.filter(isRealChampionship).map((c) => ({
-          ...c,
-          stages: sortStagesChronologically(c.stages),
-        }));
+        const map = new Map<string, Championship>();
+        cloudChamps.filter(isRealChampionship).forEach((c) => {
+          if (!map.has(c.id)) {
+            map.set(c.id, {
+              ...c,
+              stages: sortStagesChronologically(c.stages),
+            });
+          }
+        });
+        const filtered = Array.from(map.values());
         setChampionships(filtered);
         try {
           localStorage.setItem('apexsim_championships_db', JSON.stringify(filtered));
@@ -873,50 +885,37 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }),
     }));
 
-    // Update stats for drivers
+    // Update stats deterministically for all drivers involved in this stage
+    const updatedChampsForStats = championships.map((c) => {
+      if (c.id !== championshipId) return c;
+      return {
+        ...c,
+        stages: c.stages.map((st) => {
+          if (st.id !== stageId) return st;
+          return {
+            ...st,
+            status: 'Concluída' as const,
+            results,
+            poleDriverId: poleData?.driverId,
+            poleTime: poleData?.time,
+            fastestLapDriverId: fastestLapData?.driverId,
+            fastestLapTime: fastestLapData?.time,
+          };
+        }),
+      };
+    });
+
     results.forEach((res) => {
-      const driverUser = users.find((u) => u.id === res.driverId);
+      const driverUser = users.find(
+        (u) =>
+          u.id === res.driverId ||
+          (res.driverName && u.name.toLowerCase().trim() === res.driverName.toLowerCase().trim())
+      );
       if (driverUser) {
-        const isWinner = res.finishPosition === 1 && res.status === 'FINISHED';
-        const isPodium = res.finishPosition <= 3 && res.status === 'FINISHED';
-        const isDNF = res.status === 'DNF' || res.status === 'DSQ';
-
-        // Dynamic Official Sim Rating calculation based on race result
-        const curRating = driverUser.stats.simRating || 3000;
-        let ratingDelta = 0;
-        if (res.status === 'FINISHED') {
-          if (res.finishPosition === 1) ratingDelta = 45;
-          else if (res.finishPosition === 2) ratingDelta = 30;
-          else if (res.finishPosition === 3) ratingDelta = 20;
-          else if (res.finishPosition <= 5) ratingDelta = 12;
-          else if (res.finishPosition <= 10) ratingDelta = 6;
-          else ratingDelta = -5;
-
-          if (res.hasPole) ratingDelta += 8;
-          if (res.hasFastestLap) ratingDelta += 5;
-        } else if (res.status === 'DNS') {
-          // Driver did not start / missed race: no rating delta penalty
-          ratingDelta = 0;
-        } else {
-          ratingDelta = -18;
-        }
-        const newSimRating = Math.max(1000, curRating + ratingDelta);
-
-        const didParticipate = res.status !== 'DNS';
-
+        const accurateStats = computePilotStatsFromChampionships(driverUser, updatedChampsForStats);
         updateUser({
           ...driverUser,
-          stats: {
-            ...driverUser.stats,
-            races: driverUser.stats.races + (didParticipate ? 1 : 0),
-            wins: driverUser.stats.wins + (isWinner ? 1 : 0),
-            podiums: driverUser.stats.podiums + (isPodium ? 1 : 0),
-            poles: driverUser.stats.poles + (res.hasPole ? 1 : 0),
-            fastestLaps: driverUser.stats.fastestLaps + (res.hasFastestLap ? 1 : 0),
-            points: driverUser.stats.points + res.pointsAwarded,
-            dnfs: driverUser.stats.dnfs + (isDNF ? 1 : 0),
-            simRating: newSimRating,
-          },
+          stats: accurateStats,
         });
       }
     });
@@ -947,33 +946,36 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
       }),
     }));
 
-    // Update stats for drivers participating in the sprint
-    results.forEach((res) => {
-      const driverUser = users.find((u) => u.id === res.driverId);
-      if (driverUser) {
-        const curRating = driverUser.stats.simRating || 3000;
-        let ratingDelta = 0;
-        if (res.status === 'FINISHED') {
-          if (res.finishPosition === 1) ratingDelta = 20;
-          else if (res.finishPosition === 2) ratingDelta = 14;
-          else if (res.finishPosition === 3) ratingDelta = 10;
-          else if (res.finishPosition <= 5) ratingDelta = 6;
-          else if (res.finishPosition <= 8) ratingDelta = 3;
-          else ratingDelta = -2;
-        } else if (res.status === 'DNS') {
-          ratingDelta = 0;
-        } else {
-          ratingDelta = -8;
-        }
-        const newSimRating = Math.max(1000, curRating + ratingDelta);
+    // Update stats deterministically for drivers participating in the sprint
+    const updatedChampsForSprintStats = championships.map((c) => {
+      if (c.id !== championshipId) return c;
+      return {
+        ...c,
+        stages: c.stages.map((st) => {
+          if (st.id !== stageId) return st;
+          return {
+            ...st,
+            sprintResults: results,
+            sprintPoleDriverId: poleData?.driverId,
+            sprintPoleTime: poleData?.time,
+            sprintFastestLapDriverId: fastestLapData?.driverId,
+            sprintFastestLapTime: fastestLapData?.time,
+          };
+        }),
+      };
+    });
 
+    results.forEach((res) => {
+      const driverUser = users.find(
+        (u) =>
+          u.id === res.driverId ||
+          (res.driverName && u.name.toLowerCase().trim() === res.driverName.toLowerCase().trim())
+      );
+      if (driverUser) {
+        const accurateStats = computePilotStatsFromChampionships(driverUser, updatedChampsForSprintStats);
         updateUser({
           ...driverUser,
-          stats: {
-            ...driverUser.stats,
-            points: driverUser.stats.points + (res.pointsAwarded || 0),
-            simRating: newSimRating,
-          },
+          stats: accurateStats,
         });
       }
     });

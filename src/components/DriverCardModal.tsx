@@ -22,6 +22,7 @@ import { useChampionships } from '../context/ChampionshipContext';
 import { getSimRatingTier } from '../utils/simRating';
 import { CountryFlag } from './CountryFlag';
 import { sanitizeUserProfileTeams } from '../services/userService';
+import { computePilotStatsFromChampionships } from '../utils/driverStats';
 
 interface DriverCardModalProps {
   initialDriver?: User | null;
@@ -36,7 +37,7 @@ export const DriverCardModal: React.FC<DriverCardModalProps> = ({
   onClose,
 }) => {
   const { currentUser, users } = useAuth();
-  const { activeChampionship, getDriverCommunityTrophies } = useChampionships();
+  const { activeChampionship, championships, getDriverCommunityTrophies } = useChampionships();
 
   // Selected driver
   const [selectedDriverId, setSelectedDriverId] = useState<string>(
@@ -63,17 +64,7 @@ export const DriverCardModal: React.FC<DriverCardModalProps> = ({
 
   if (!driver) return null;
 
-  const stats = driver.stats || {
-    races: 0,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    points: 0,
-    dnfs: 0,
-    safetyRating: 'B 3.50',
-    simRating: 3000,
-  };
+  const stats = computePilotStatsFromChampionships(driver, championships);
 
   const winRate = stats.races > 0 ? ((stats.wins / stats.races) * 100).toFixed(1) : '0.0';
   const podiumRate = stats.races > 0 ? ((stats.podiums / stats.races) * 100).toFixed(1) : '0.0';

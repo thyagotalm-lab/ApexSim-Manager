@@ -30,6 +30,7 @@ import {
 } from '../utils/simRating';
 import { CountryFlag } from './CountryFlag';
 import { sanitizeUserProfileTeams } from '../services/userService';
+import { computePilotStatsFromChampionships } from '../utils/driverStats';
 
 interface SimRatingRankingViewProps {
   onNavigateToProfile?: () => void;
@@ -47,7 +48,7 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTier, setSelectedTier] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'simRating' | 'wins' | 'podiums' | 'races' | 'points'>('simRating');
+  const [sortBy, setSortBy] = useState<'simRating' | 'wins' | 'podiums' | 'races' | 'qualifications' | 'points'>('simRating');
   const [sortDirection, setSortDirection] = useState<'desc' | 'asc'>('desc');
 
   // Reset Ranking States
@@ -76,34 +77,18 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
   };
 
   // Consolidate pilots list: All registered users with safe stats and authentic profile teams
+  // Consolidate pilots list: All registered users with safe stats and authentic profile teams
   const allDrivers: User[] = useMemo(() => {
     return users.map((u) => {
       const cleanUser = sanitizeUserProfileTeams(u);
-      const stats = cleanUser.stats || {
-        races: 0,
-        wins: 0,
-        podiums: 0,
-        poles: 0,
-        fastestLaps: 0,
-        points: 0,
-        dnfs: 0,
-        safetyRating: 'B 3.50',
-        simRating: DEFAULT_SIM_RATING,
-      };
-
-      const simRating = typeof stats.simRating === 'number' && !isNaN(stats.simRating)
-        ? stats.simRating
-        : DEFAULT_SIM_RATING;
-
+      // Compute accurate stats directly from ground-truth championship stages
+      const computedStats = computePilotStatsFromChampionships(cleanUser, championships);
       return {
         ...cleanUser,
-        stats: {
-          ...stats,
-          simRating,
-        },
+        stats: computedStats,
       };
     });
-  }, [users]);
+  }, [users, championships]);
 
   // Filtered & Sorted Drivers
   const rankedDrivers = useMemo(() => {
@@ -149,7 +134,7 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
   const top2 = rankedDrivers[1];
   const top3 = rankedDrivers[2];
 
-  const handleSort = (field: 'simRating' | 'wins' | 'podiums' | 'races' | 'points') => {
+  const handleSort = (field: 'simRating' | 'wins' | 'podiums' | 'races' | 'qualifications' | 'points') => {
     if (sortBy === field) {
       setSortDirection((prev) => (prev === 'desc' ? 'asc' : 'desc'));
     } else {
@@ -281,6 +266,17 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
               <span className="mt-1 text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold">
                 {getSimRatingTier(top2.stats.simRating).name}
               </span>
+              <div className="mt-2 flex items-center gap-1.5 text-[10px] font-mono">
+                <span className="px-2 py-0.5 rounded bg-purple-950/80 border border-purple-800/80 text-purple-300 font-bold" title={`${top2.stats.qualifications || 0} qualificação(ões) disputada(s)`}>
+                  {top2.stats.qualifications || 0} Q
+                </span>
+                <span className="px-2 py-0.5 rounded bg-blue-950/80 border border-blue-800/80 text-blue-300 font-bold" title={`${top2.stats.races || 0} corrida(s) propriamente dita(s)`}>
+                  {top2.stats.races || 0} R
+                </span>
+                <span className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-800/80 text-amber-300 font-bold" title={`${top2.stats.wins || 0} vitória(s)`}>
+                  {top2.stats.wins || 0} V
+                </span>
+              </div>
             </div>
           )}
 
@@ -318,6 +314,17 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
               <span className="mt-1 text-[11px] px-2.5 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-700 font-bold">
                 {getSimRatingTier(top1.stats.simRating).name}
               </span>
+              <div className="mt-2.5 flex items-center gap-1.5 text-[10px] font-mono">
+                <span className="px-2 py-0.5 rounded bg-purple-950/90 border border-purple-700 text-purple-200 font-bold shadow" title={`${top1.stats.qualifications || 0} qualificação(ões) disputada(s)`}>
+                  {top1.stats.qualifications || 0} Q
+                </span>
+                <span className="px-2 py-0.5 rounded bg-blue-950/90 border border-blue-700 text-blue-200 font-bold shadow" title={`${top1.stats.races || 0} corrida(s) propriamente dita(s)`}>
+                  {top1.stats.races || 0} R
+                </span>
+                <span className="px-2 py-0.5 rounded bg-amber-950/90 border border-amber-700 text-amber-200 font-bold shadow" title={`${top1.stats.wins || 0} vitória(s)`}>
+                  {top1.stats.wins || 0} V
+                </span>
+              </div>
             </div>
           )}
 
@@ -355,6 +362,17 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
               <span className="mt-1 text-[10px] px-2 py-0.5 rounded-full bg-amber-950/70 text-amber-300 font-semibold border border-amber-900">
                 {getSimRatingTier(top3.stats.simRating).name}
               </span>
+              <div className="mt-2 flex items-center gap-1.5 text-[10px] font-mono">
+                <span className="px-2 py-0.5 rounded bg-purple-950/80 border border-purple-800/80 text-purple-300 font-bold" title={`${top3.stats.qualifications || 0} qualificação(ões) disputada(s)`}>
+                  {top3.stats.qualifications || 0} Q
+                </span>
+                <span className="px-2 py-0.5 rounded bg-blue-950/80 border border-blue-800/80 text-blue-300 font-bold" title={`${top3.stats.races || 0} corrida(s) propriamente dita(s)`}>
+                  {top3.stats.races || 0} R
+                </span>
+                <span className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-800/80 text-amber-300 font-bold" title={`${top3.stats.wins || 0} vitória(s)`}>
+                  {top3.stats.wins || 0} V
+                </span>
+              </div>
             </div>
           )}
         </div>
@@ -427,6 +445,26 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
         </div>
       </div>
 
+      {/* Criteria Info Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-3 text-xs shadow-md">
+        <div className="flex items-center gap-2 text-slate-200">
+          <Info className="w-4 h-4 text-amber-400 shrink-0" />
+          <span className="font-bold text-white">Critérios Oficiais do Ranking:</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-4 text-[11px]">
+          <span className="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-purple-900/60">
+            <span className="w-2 h-2 rounded-full bg-purple-400 shrink-0" />
+            <span className="text-slate-400">Qualificações (Q):</span>
+            <strong className="text-purple-300 font-mono">Sessões de Quali / Grid</strong>
+          </span>
+          <span className="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-blue-900/60">
+            <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
+            <span className="text-slate-400">Corridas (R):</span>
+            <strong className="text-blue-300 font-mono">Corridas Propriamente Ditas (Sem DNS)</strong>
+          </span>
+        </div>
+      </div>
+
       {/* Table of Pilots */}
       <div className="bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
@@ -446,22 +484,45 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
                     )}
                   </div>
                 </th>
-                <th className="py-3 px-4 text-center">Tier</th>
-                <th className="py-3 px-4 text-center">Safety Rating</th>
+                <th className="py-3 px-3 text-center">Tier</th>
+                <th className="py-3 px-3 text-center">Safety Rating</th>
+                <th
+                  onClick={() => handleSort('qualifications')}
+                  className="py-3 px-3 text-center cursor-pointer hover:text-white transition-colors"
+                  title="Número de sessões de qualificação oficiais disputadas pelo piloto (tomadas de tempo e posições no grid)"
+                >
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <span className="text-purple-400 font-black">Qualificações (Q)</span>
+                      {sortBy === 'qualifications' && (
+                        sortDirection === 'desc' ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />
+                      )}
+                    </div>
+                    <span className="text-[9px] text-purple-300/70 font-mono tracking-tight lowercase hidden sm:inline">
+                      sessões de quali
+                    </span>
+                  </div>
+                </th>
                 <th
                   onClick={() => handleSort('races')}
-                  className="py-3 px-4 text-center cursor-pointer hover:text-white transition-colors"
+                  className="py-3 px-3 text-center cursor-pointer hover:text-white transition-colors"
+                  title="Número de corridas oficiais propriamente ditas disputadas pelo piloto (largadas válidas, excluindo DNS)"
                 >
-                  <div className="flex items-center justify-center gap-1">
-                    <span>Corridas</span>
-                    {sortBy === 'races' && (
-                      sortDirection === 'desc' ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />
-                    )}
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <span className="text-blue-400 font-black">Corridas (R)</span>
+                      {sortBy === 'races' && (
+                        sortDirection === 'desc' ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />
+                      )}
+                    </div>
+                    <span className="text-[9px] text-blue-300/70 font-mono tracking-tight lowercase hidden sm:inline">
+                      largadas oficiais
+                    </span>
                   </div>
                 </th>
                 <th
                   onClick={() => handleSort('wins')}
-                  className="py-3 px-4 text-center cursor-pointer hover:text-white transition-colors"
+                  className="py-3 px-3 text-center cursor-pointer hover:text-white transition-colors"
                 >
                   <div className="flex items-center justify-center gap-1">
                     <span>Vitórias</span>
@@ -472,7 +533,7 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
                 </th>
                 <th
                   onClick={() => handleSort('podiums')}
-                  className="py-3 px-4 text-center cursor-pointer hover:text-white transition-colors"
+                  className="py-3 px-3 text-center cursor-pointer hover:text-white transition-colors"
                 >
                   <div className="flex items-center justify-center gap-1">
                     <span>Pódios</span>
@@ -483,7 +544,7 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
                 </th>
                 <th
                   onClick={() => handleSort('points')}
-                  className="py-3 px-4 text-center cursor-pointer hover:text-white transition-colors"
+                  className="py-3 px-3 text-center cursor-pointer hover:text-white transition-colors"
                 >
                   <div className="flex items-center justify-center gap-1">
                     <span>Pontos</span>
@@ -499,7 +560,7 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
             <tbody className="divide-y divide-slate-800/60 font-medium">
               {rankedDrivers.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-500">
+                  <td colSpan={11} className="py-12 text-center text-slate-500">
                     Nenhum piloto encontrado com os filtros selecionados.
                   </td>
                 </tr>
@@ -609,29 +670,46 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
                       </td>
 
                       {/* Safety Rating */}
-                      <td className="py-3 px-4 text-center">
+                      <td className="py-3 px-3 text-center">
                         <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-emerald-400 font-mono font-bold text-[11px]">
                           {driver.stats.safetyRating || 'B 3.50'}
                         </span>
                       </td>
 
-                      {/* Races */}
-                      <td className="py-3 px-4 text-center font-mono-numbers text-slate-300">
-                        {driver.stats.races || 0}
+                      {/* Qualifications (Qualis / Grid) */}
+                      <td className="py-3 px-3 text-center">
+                        <span
+                          className="inline-flex items-center justify-center gap-1 min-w-[34px] px-2.5 py-1 rounded-md bg-purple-950/70 border border-purple-800/80 text-purple-300 font-mono font-bold text-xs shadow-sm"
+                          title={`${driver.stats.qualifications || 0} qualificação(ões) oficial(is) disputada(s) (tomada de tempo / posição de grid)`}
+                        >
+                          <span>{driver.stats.qualifications || 0}</span>
+                          <span className="text-[9px] text-purple-400 font-semibold">Q</span>
+                        </span>
+                      </td>
+
+                      {/* Races (Corridas propriamente ditas) */}
+                      <td className="py-3 px-3 text-center">
+                        <span
+                          className="inline-flex items-center justify-center gap-1 min-w-[34px] px-2.5 py-1 rounded-md bg-blue-950/70 border border-blue-800/80 text-blue-300 font-mono font-bold text-xs shadow-sm"
+                          title={`${driver.stats.races || 0} corrida(s) oficial(is) propriamente dita(s) disputada(s) (largadas válidas, sem DNS)`}
+                        >
+                          <span>{driver.stats.races || 0}</span>
+                          <span className="text-[9px] text-blue-400 font-semibold">R</span>
+                        </span>
                       </td>
 
                       {/* Wins */}
-                      <td className="py-3 px-4 text-center font-mono-numbers text-amber-400 font-bold">
+                      <td className="py-3 px-3 text-center font-mono-numbers text-amber-400 font-bold">
                         {driver.stats.wins || 0}
                       </td>
 
                       {/* Podiums */}
-                      <td className="py-3 px-4 text-center font-mono-numbers text-slate-300">
+                      <td className="py-3 px-3 text-center font-mono-numbers text-slate-300">
                         {driver.stats.podiums || 0}
                       </td>
 
                       {/* Points */}
-                      <td className="py-3 px-4 text-center font-mono-numbers font-bold text-white">
+                      <td className="py-3 px-3 text-center font-mono-numbers font-bold text-white">
                         {driver.stats.points || 0}
                       </td>
 

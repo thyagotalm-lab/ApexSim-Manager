@@ -20,6 +20,7 @@ import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
 import { getSimRatingTier } from '../utils/simRating';
 import { sanitizeUserProfileTeams } from '../services/userService';
+import { computePilotStatsFromChampionships } from '../utils/driverStats';
 
 interface HeadToHeadModalProps {
   initialDriverA?: User | null;
@@ -65,29 +66,8 @@ export const HeadToHeadModal: React.FC<HeadToHeadModalProps> = ({
 
   if (!driverA || !driverB) return null;
 
-  const statsA = driverA.stats || {
-    races: 0,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    points: 0,
-    dnfs: 0,
-    safetyRating: 'B 3.50',
-    simRating: 3000,
-  };
-
-  const statsB = driverB.stats || {
-    races: 0,
-    wins: 0,
-    podiums: 0,
-    poles: 0,
-    fastestLaps: 0,
-    points: 0,
-    dnfs: 0,
-    safetyRating: 'B 3.50',
-    simRating: 3000,
-  };
+  const statsA = computePilotStatsFromChampionships(driverA, championships);
+  const statsB = computePilotStatsFromChampionships(driverB, championships);
 
   const tierA = getSimRatingTier(statsA.simRating);
   const tierB = getSimRatingTier(statsB.simRating);
@@ -179,6 +159,22 @@ export const HeadToHeadModal: React.FC<HeadToHeadModalProps> = ({
       textA: `${statsA.simRating}`,
       textB: `${statsB.simRating}`,
       better: statsA.simRating > statsB.simRating ? 'A' : statsB.simRating > statsA.simRating ? 'B' : 'TIE',
+    },
+    {
+      label: 'Qualificações (Q)',
+      valA: statsA.qualifications || 0,
+      valB: statsB.qualifications || 0,
+      textA: `${statsA.qualifications || 0} Q`,
+      textB: `${statsB.qualifications || 0} Q`,
+      better: (statsA.qualifications || 0) > (statsB.qualifications || 0) ? 'A' : (statsB.qualifications || 0) > (statsA.qualifications || 0) ? 'B' : 'TIE',
+    },
+    {
+      label: 'Corridas (R)',
+      valA: statsA.races || 0,
+      valB: statsB.races || 0,
+      textA: `${statsA.races || 0} Corridas`,
+      textB: `${statsB.races || 0} Corridas`,
+      better: statsA.races > statsB.races ? 'A' : statsB.races > statsA.races ? 'B' : 'TIE',
     },
     {
       label: 'Safety Rating',

@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { UserCheck, Trophy, Award, Zap, Shield, Flag, CheckCircle2, TrendingUp, Edit3, Save, Camera, Gamepad2, AlertCircle, Sparkles, Swords } from 'lucide-react';
+import { UserCheck, Trophy, Award, Zap, Shield, Flag, CheckCircle2, TrendingUp, Edit3, Save, Camera, Gamepad2, AlertCircle, Sparkles, Swords, Bell, Smartphone, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useChampionships, MAX_CHAMPIONSHIPS_PER_PILOT } from '../context/ChampionshipContext';
 import { calculateDriverStandings } from '../utils/standings';
 import { AvatarUploader } from './AvatarUploader';
 import { CountryFlag } from './CountryFlag';
 import { getSimRatingTier } from '../utils/simRating';
+import { computePilotStatsFromChampionships } from '../utils/driverStats';
+import { usePushNotifications } from '../hooks/usePushNotifications';
+import { PWAInstallButton } from './PWAInstallButton';
 import { User } from '../types';
 
 interface DriverProfileViewProps {
@@ -30,6 +33,8 @@ export const DriverProfileView: React.FC<DriverProfileViewProps> = ({
   const [discordTag, setDiscordTag] = useState(currentUser?.discordTag || '');
   const [teamName, setTeamName] = useState(currentUser?.teamName || '');
   const [teamTag, setTeamTag] = useState(currentUser?.teamTag || '');
+  const { isSupported, permission, requestPermission, testPushNotification } = usePushNotifications();
+  const [profilePushToast, setProfilePushToast] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (currentUser) {
@@ -52,7 +57,7 @@ export const DriverProfileView: React.FC<DriverProfileViewProps> = ({
     );
   }
 
-  const stats = currentUser.stats;
+  const stats = computePilotStatsFromChampionships(currentUser, championships);
   const winRate = stats.races > 0 ? ((stats.wins / stats.races) * 100).toFixed(1) : '0.0';
   const podiumRate = stats.races > 0 ? ((stats.podiums / stats.races) * 100).toFixed(1) : '0.0';
 
@@ -390,13 +395,21 @@ export const DriverProfileView: React.FC<DriverProfileViewProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-          <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800">
-            <span className="text-xs text-slate-400">Total de Corridas</span>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4">
+          <div className="p-4 rounded-xl bg-slate-900/70 border border-purple-900/50">
+            <span className="text-xs text-purple-400 font-bold">Qualificações</span>
+            <div className="text-2xl sm:text-3xl font-bold font-mono-numbers text-white mt-1">
+              {stats.qualifications || 0}
+            </div>
+            <span className="text-[11px] text-slate-500 font-sans mt-0.5 block">Sessões disputadas</span>
+          </div>
+
+          <div className="p-4 rounded-xl bg-slate-900/70 border border-blue-900/50">
+            <span className="text-xs text-blue-400 font-bold">Corridas Disputadas</span>
             <div className="text-2xl sm:text-3xl font-bold font-mono-numbers text-white mt-1">
               {stats.races}
             </div>
-            <span className="text-[11px] text-slate-500 font-sans mt-0.5 block">Participações oficiais</span>
+            <span className="text-[11px] text-slate-500 font-sans mt-0.5 block">Largadas oficiais</span>
           </div>
 
           <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800">
@@ -659,6 +672,133 @@ export const DriverProfileView: React.FC<DriverProfileViewProps> = ({
             })}
           </div>
         )}
+      </div>
+
+      {/* PWA App & Push Notifications Settings Section */}
+      <div className="rounded-2xl border border-slate-800 bg-[#0c101a] p-5 sm:p-6 shadow-xl space-y-5">
+        <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-red-950/80 border border-red-700/60 flex items-center justify-center text-red-400">
+              <Smartphone className="w-4 h-4" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <span>Aplicativo PWA & Notificações Push</span>
+                <span className="text-[10px] bg-red-600 text-white font-extrabold px-1.5 py-0.2 rounded font-mono">
+                  PWA
+                </span>
+              </h2>
+              <p className="text-xs text-slate-400">
+                Gerencie o acesso do ApexSim no seu dispositivo e alertas instantâneos de corridas
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* PWA Card */}
+          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white flex items-center gap-2">
+                <Smartphone className="w-4 h-4 text-red-400" />
+                <span>Instalação do Aplicativo</span>
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
+                Standalone / Mobile / PC
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Instale o ApexSim Manager como app nativo no Windows, Mac, Android ou iPhone para acesso com um toque e velocidade máxima offline.
+            </p>
+            <div>
+              <PWAInstallButton variant="card" />
+            </div>
+          </div>
+
+          {/* Push Notifications Card */}
+          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white flex items-center gap-2">
+                <Bell className="w-4 h-4 text-amber-400" />
+                <span>Alertas Push em Tempo Real</span>
+              </span>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                  permission === 'granted'
+                    ? 'bg-emerald-950 text-emerald-300 border-emerald-700'
+                    : permission === 'denied'
+                    ? 'bg-red-950 text-red-300 border-red-700'
+                    : 'bg-amber-950 text-amber-300 border-amber-700'
+                }`}
+              >
+                {permission === 'granted'
+                  ? '● Notificações Ativas'
+                  : permission === 'denied'
+                  ? '● Bloqueadas'
+                  : '● Pendente'}
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Receba avisos instantâneos quando resultados oficiais forem homologados, decisões de comissários forem emitidas e lembretes de largada.
+            </p>
+
+            <div className="pt-1 flex flex-wrap items-center gap-2">
+              {permission === 'granted' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const sent = await testPushNotification();
+                      setProfilePushToast(
+                        sent
+                          ? 'Notificação de teste disparada! Verifique seu sistema.'
+                          : 'Tentativa enviada no navegador.'
+                      );
+                      setTimeout(() => setProfilePushToast(null), 4000);
+                    }}
+                    className="px-3.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Bell className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Disparar Notificação de Teste</span>
+                  </button>
+                  <span className="text-[11px] text-emerald-400 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Tudo configurado</span>
+                  </span>
+                </>
+              ) : permission === 'denied' ? (
+                <div className="text-[11px] text-amber-300 bg-amber-950/40 border border-amber-800/40 p-2.5 rounded-lg w-full">
+                  As notificações estão bloqueadas no seu navegador. Para reativar, clique no cadeado da barra de URL e mude &quot;Notificações&quot; para &quot;Permitir&quot;.
+                </div>
+              ) : isSupported ? (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const status = await requestPermission();
+                    if (status === 'granted') {
+                      await testPushNotification();
+                      setProfilePushToast('Notificações push autorizadas com sucesso!');
+                      setTimeout(() => setProfilePushToast(null), 4000);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all shadow-md cursor-pointer flex items-center gap-2"
+                >
+                  <Bell className="w-3.5 h-3.5" />
+                  <span>Ativar Notificações no Dispositivo</span>
+                </button>
+              ) : (
+                <span className="text-xs text-slate-500">Notificações não suportadas nesta janela.</span>
+              )}
+            </div>
+
+            {profilePushToast && (
+              <div className="p-2 rounded bg-emerald-950/80 border border-emerald-700/80 text-[11px] text-emerald-300">
+                ✓ {profilePushToast}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Reset Confirmation Modal */}

@@ -28,11 +28,49 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [notifications, setNotifications] = useState<AppNotification[]>(() => getLocalNotifications());
 
   useEffect(() => {
+    let isInitialLoad = true;
     const unsubscribe = subscribeToNotifications(currentUser?.id, (updatedList) => {
       // Filter for this user or broadcast to 'all'
       const relevant = updatedList.filter(
         (n) => !n.userId || n.userId === 'all' || (currentUser && n.userId === currentUser.id)
       );
+
+      // If it's a new arrival after initial load, trigger browser push notification if permitted
+      if (!isInitialLoad && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        const newest = relevant[0];
+        if (newest && !newest.read) {
+          const ageSeconds = (Date.now() - new Date(newest.createdAt).getTime()) / 1000;
+          if (ageSeconds < 60) {
+            try {
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.getRegistration().then((reg) => {
+                  if (reg && reg.showNotification) {
+                    reg.showNotification(newest.title, {
+                      body: newest.message,
+                      icon: '/pwa-192x192.png',
+                      badge: '/favicon.svg',
+                      tag: `notif_${newest.id}`,
+                    });
+                  } else {
+                    new Notification(newest.title, {
+                      body: newest.message,
+                      icon: '/pwa-192x192.png',
+                      badge: '/favicon.svg',
+                    });
+                  }
+                });
+              } else {
+                new Notification(newest.title, {
+                  body: newest.message,
+                  icon: '/pwa-192x192.png',
+                });
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
+      isInitialLoad = false;
       setNotifications(relevant);
     });
 

@@ -1,6 +1,7 @@
 export type UserRole = 'admin' | 'pilot' | 'driver';
 
 export interface UserStats {
+  qualifications?: number;
   races: number;
   wins: number;
   podiums: number;
@@ -239,6 +240,7 @@ export interface Championship {
   defaultRaceDay?: DayOfWeek;
   recurrence?: StageRecurrence;
   createdAt: string;
+  isDeleted?: boolean;
 }
 
 export interface DriverStanding {

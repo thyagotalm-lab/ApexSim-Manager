@@ -2,6 +2,13 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import {
+  getRelationalDatabase,
+  runRelationalETLMigration,
+  getRelationalDatabaseStats,
+  queryDriverStandingsSQL,
+  queryConstructorStandingsSQL,
+} from './src/db/sqlite.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -188,6 +195,11 @@ const readChampionshipsFromFile = (): any[] => {
 const writeChampionshipsToFile = (champs: any[]) => {
   try {
     fs.writeFileSync(CHAMPIONSHIPS_FILE, JSON.stringify(champs, null, 2), 'utf-8');
+    try {
+      runRelationalETLMigration();
+    } catch (e) {
+      console.warn('[Relational DB] Auto-sync warning:', e);
+    }
   } catch (err) {
     console.error('Error writing championships file:', err);
   }
@@ -378,6 +390,11 @@ const writeUsersToFile = (usersList: any[]) => {
       cleaned.unshift(THYAGO_ADMIN_USER);
     }
     fs.writeFileSync(USERS_FILE, JSON.stringify(cleaned, null, 2), 'utf-8');
+    try {
+      runRelationalETLMigration();
+    } catch (e) {
+      console.warn('[Relational DB] Auto-sync users warning:', e);
+    }
   } catch (err) {
     console.error('Error writing users file:', err);
   }
@@ -1003,8 +1020,80 @@ app.post('/api/notifications/clear', (req, res) => {
 app.get('/health', (req, res) => res.status(200).send('OK'));
 app.get('/api/health', (req, res) => res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() }));
 
+// ==========================================
+// Relational Database Management & SQL Endpoints
+// ==========================================
+
+// Get database engine status and table row counts
+app.get('/api/relational/status', (req, res) => {
+  try {
+    const stats = getRelationalDatabaseStats();
+    res.json({ success: true, ...stats });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Trigger on-demand ETL migration from files/Firestore into relational tables
+app.post('/api/relational/migrate', (req, res) => {
+  try {
+    const result = runRelationalETLMigration();
+    res.json({ success: true, message: 'Relational ETL migration executed successfully', ...result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// View rows of a specific relational table (for admin auditing and inspector)
+app.get('/api/relational/tables/:tableName', (req, res) => {
+  const { tableName } = req.params;
+  const allowed = [
+    'users',
+    'championships',
+    'stages',
+    'race_results',
+    'registrations',
+    'championship_admins',
+    'official_teams',
+    'steward_protests',
+    'notifications',
+  ];
+  if (!allowed.includes(tableName)) {
+    return res.status(400).json({ error: 'Tabela não permitida no inspetor' });
+  }
+  try {
+    const db = getRelationalDatabase();
+    const rows = db.prepare(`SELECT * FROM ${tableName} LIMIT 100`).all();
+    res.json({ success: true, table: tableName, count: rows.length, rows });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Query official driver and constructor standings computed directly via SQL
+app.get('/api/relational/standings/:championshipId', (req, res) => {
+  const { championshipId } = req.params;
+  try {
+    const driverStandings = queryDriverStandingsSQL(championshipId);
+    const constructorStandings = queryConstructorStandingsSQL(championshipId);
+    res.json({ success: true, championshipId, driverStandings, constructorStandings });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Serve frontend with Vite middlewares in dev, or static files in production
 async function startServer() {
+  // Initialize Relational Database Engine and run initial ETL migration
+  try {
+    console.log('[ApexSim] Initializing Relational Database Engine (SQLite / ACID)...');
+    getRelationalDatabase();
+    const migrationResult = runRelationalETLMigration();
+    console.log('[ApexSim] Relational schema and initial data synced successfully:', migrationResult);
+  } catch (dbErr) {
+    console.error('[ApexSim] Warning: Relational DB initialization warning:', dbErr);
+  }
+
   if (fs.existsSync(path.resolve(__dirname, 'public'))) {
     app.use(express.static(path.resolve(__dirname, 'public')));
   }
@@ -1035,8 +1124,13 @@ async function startServer() {
     });
   } else {
     const { createServer: createViteServer } = await import('vite');
+    const isHmrDisabled = process.env.DISABLE_HMR === 'true';
     const vite = await createViteServer({
-      server: { middlewareMode: true, allowedHosts: true },
+      server: {
+        middlewareMode: true,
+        allowedHosts: true,
+        hmr: isHmrDisabled ? false : undefined,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);

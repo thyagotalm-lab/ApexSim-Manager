@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Shield, Users, Award, Calendar, Plus, UserPlus, FileText, CheckCircle2, AlertTriangle, Trash2, X, Sliders, Settings, Scale, Crown } from 'lucide-react';
+import { Shield, Users, Award, Calendar, Plus, UserPlus, FileText, CheckCircle2, AlertTriangle, Trash2, X, Sliders, Settings, Scale, Crown, Database } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
 import { StageRound } from '../types';
 import { isDeletedUserAccount } from '../services/userService';
 import { EditChampionshipModal } from './EditChampionshipModal';
 import { StewardsProtestsModal } from './StewardsProtestsModal';
+import { RelationalDbModal } from './RelationalDbModal';
 
 interface AdminPanelProps {
   onOpenAdminsModal: () => void;
@@ -27,6 +28,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isStewardsModalOpen, setIsStewardsModalOpen] = useState(false);
+  const [isRelationalDbModalOpen, setIsRelationalDbModalOpen] = useState(false);
 
   if (!activeChampionship) {
     return <div className="p-8 text-center text-slate-400">Nenhum campeonato selecionado.</div>;
@@ -73,6 +75,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setIsRelationalDbModalOpen(true)}
+            className="flex items-center gap-1.5 bg-gradient-to-r from-red-900/90 to-red-950 hover:from-red-800 hover:to-red-900 text-white border border-red-700/70 hover:border-red-500 px-3.5 py-2 rounded-xl text-xs font-bold shadow-md shadow-red-950 transition-all cursor-pointer whitespace-nowrap"
+            title="Abrir Banco de Dados Relacional Normalizado (SQLite / ACID) e Migração"
+          >
+            <Database className="w-3.5 h-3.5 text-red-400" />
+            <span>Banco Relacional SQL</span>
+          </button>
+
           <button
             onClick={() => setIsStewardsModalOpen(true)}
             className="flex items-center gap-1.5 bg-amber-950/90 hover:bg-amber-900 text-amber-300 border border-amber-800/80 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
@@ -132,7 +143,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       )}
 
       {/* Admin Quick Action Hub Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Card 1: Configurações do Campeonato */}
         <div className="p-5 rounded-xl bg-slate-900/70 border border-slate-800 flex flex-col justify-between">
           <div>
@@ -250,6 +261,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             Adicionar Nova Etapa
           </button>
         </div>
+
+        {/* Card 6: Banco Relacional Estruturado (SQL) */}
+        <div className="p-5 rounded-xl bg-slate-900/70 border border-slate-800 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Banco de Dados</span>
+              <Database className="w-4 h-4 text-emerald-400" />
+            </div>
+            <h3 className="text-base font-bold text-white">Banco Relacional SQL</h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Esquema 3NF normalizado (SQLite / ACID). Consulte classificações via SQL e sincronize dados.
+            </p>
+          </div>
+          <button
+            onClick={() => setIsRelationalDbModalOpen(true)}
+            className="mt-4 w-full py-2 rounded-lg bg-gradient-to-r from-emerald-950/80 to-slate-900 hover:from-emerald-900 hover:to-slate-800 text-emerald-300 border border-emerald-800/70 text-xs font-bold shadow transition-all cursor-pointer flex items-center justify-center gap-1.5"
+          >
+            <Database className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Explorador & Migração</span>
+          </button>
+        </div>
       </div>
 
       {/* League Admins Overview List */}
@@ -345,6 +377,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         <StewardsProtestsModal
           isOpen={isStewardsModalOpen}
           onClose={() => setIsStewardsModalOpen(false)}
+        />
+      )}
+
+      {/* Relational Database Inspector & Migration Modal */}
+      {isRelationalDbModalOpen && (
+        <RelationalDbModal
+          onClose={() => setIsRelationalDbModalOpen(false)}
+          activeChampionshipId={activeChampionship.id}
         />
       )}
     </div>
