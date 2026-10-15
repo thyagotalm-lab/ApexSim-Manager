@@ -545,6 +545,8 @@ export const DriverStandingsTable: React.FC<DriverStandingsTableProps> = ({
                                   (r) =>
                                     ((r.driverId && r.driverId === driver.driverId) ||
                                       (r.driverName && r.driverName.toLowerCase().trim() === driver.driverName.toLowerCase().trim())) &&
+                                    !r.missedQuali &&
+                                    r.qualiStatus !== 'DNS' &&
                                     ((typeof r.gridPosition === 'number' && r.gridPosition > 0) || Boolean(r.hasPole))
                                 )
                               ).length;

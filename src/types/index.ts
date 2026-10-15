@@ -96,6 +96,8 @@ export interface RaceResultItem {
   hasFastestLap?: boolean;
   hasPole?: boolean;
   isReserve?: boolean;
+  missedQuali?: boolean;
+  qualiStatus?: 'FINISHED' | 'DNS' | 'DNQ' | 'NO_TIME';
 }
 
 export type StageWeather = 'Pista Seca' | 'Chuva Leve' | 'Chuva Forte' | 'Variável' | 'Noturna';

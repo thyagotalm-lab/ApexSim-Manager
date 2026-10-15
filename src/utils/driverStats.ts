@@ -73,8 +73,10 @@ export function computePilotStatsFromChampionships(
         if (res) {
           hasParticipation = true;
 
-          // Qualificação: Considerada quando o piloto participou da sessão de qualificação / grid
-          const didQualify = (typeof res.gridPosition === 'number' && res.gridPosition > 0) || Boolean(res.hasPole);
+          // Qualificação: Considerada quando o piloto efetivamente participou da sessão de qualificação
+          // Não conta se o piloto faltou à sessão de quali (missedQuali, qualiStatus === 'DNS' ou gridPosition <= 0)
+          const didMissQuali = Boolean(res.missedQuali) || res.qualiStatus === 'DNS' || (typeof res.gridPosition === 'number' && res.gridPosition <= 0);
+          const didQualify = !didMissQuali && ((typeof res.gridPosition === 'number' && res.gridPosition > 0) || Boolean(res.hasPole));
           if (didQualify) {
             qualifications += 1;
           }
