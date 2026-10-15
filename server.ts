@@ -1124,12 +1124,11 @@ async function startServer() {
     });
   } else {
     const { createServer: createViteServer } = await import('vite');
-    const isHmrDisabled = process.env.DISABLE_HMR === 'true';
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
         allowedHosts: true,
-        hmr: isHmrDisabled ? false : undefined,
+        hmr: false,
       },
       appType: 'spa',
     });

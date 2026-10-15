@@ -5,17 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script>
       // Gracefully ignore harmless WebSocket/HMR disconnect errors per environment guidelines
-      window.addEventListener('error', function(e) {
-        if (e && (e.message?.includes('WebSocket') || e.filename?.includes('@vite/client'))) {
-          e.stopImmediatePropagation();
+      window.onerror = function(msg, url, lineNo, columnNo, error) {
+        if (
+          String(msg).includes('WebSocket') ||
+          (url && url.includes('@vite/client')) ||
+          (error && String(error.message).includes('WebSocket'))
+        ) {
+          return true;
         }
-      });
+      };
+      window.addEventListener('error', function(e) {
+        if (
+          e &&
+          (e.message?.includes('WebSocket') ||
+            e.filename?.includes('@vite/client') ||
+            String(e.error?.message).includes('WebSocket') ||
+            String(e.error).includes('WebSocket'))
+        ) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          return true;
+        }
+      }, true);
       window.addEventListener('unhandledrejection', function(e) {
-        if (e && e.reason && (String(e.reason).includes('WebSocket') || String(e.reason?.message).includes('WebSocket'))) {
+        if (
+          e &&
+          e.reason &&
+          (String(e.reason).includes('WebSocket') ||
+            String(e.reason?.message).includes('WebSocket'))
+        ) {
           e.stopImmediatePropagation();
           e.preventDefault();
         }
-      });
+      }, true);
     </script>
     <title>ApexSim Manager - Gestão de Campeonatos de Sim Racing</title>
     <meta name="description" content="Plataforma profissional de gerenciamento de ligas e campeonatos de sim racing e-sports com calendários, inscrições, resultados de corridas e tabelas automatizadas." />

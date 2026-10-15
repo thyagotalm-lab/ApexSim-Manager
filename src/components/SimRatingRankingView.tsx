@@ -460,7 +460,7 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
           <span className="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1 rounded-lg border border-blue-900/60">
             <span className="w-2 h-2 rounded-full bg-blue-400 shrink-0" />
             <span className="text-slate-400">Corridas (R):</span>
-            <strong className="text-blue-300 font-mono">Corridas Propriamente Ditas (Sem DNS)</strong>
+            <strong className="text-blue-300 font-mono">Corridas (Sem DNS)</strong>
           </span>
         </div>
       </div>
