@@ -2,9 +2,15 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Using Node.js native SQLite DatabaseSync
-// @ts-ignore - node:sqlite is native in Node 22+
-import { DatabaseSync } from 'node:sqlite';
+// Using Node.js native SQLite DatabaseSync (available in Node 22.5+)
+// Dynamically imported with top-level await to allow graceful fallback without crashing on older Node versions
+let DatabaseSyncClass: any = null;
+try {
+  const sqliteMod = await import('node:sqlite');
+  DatabaseSyncClass = sqliteMod.DatabaseSync;
+} catch {
+  DatabaseSyncClass = null;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,34 +18,44 @@ const ROOT_DIR = path.resolve(__dirname, '../../');
 const DATA_DIR = path.resolve(ROOT_DIR, 'data');
 const DB_PATH = path.join(DATA_DIR, 'apexsim.sqlite');
 
-let databaseInstance: DatabaseSync | null = null;
+let databaseInstance: any = null;
 
 /**
  * Initializes and returns the SQLite Relational Database instance.
  */
-export function getRelationalDatabase(): DatabaseSync {
+export function getRelationalDatabase(): any {
   if (databaseInstance) {
     return databaseInstance;
   }
 
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!DatabaseSyncClass) {
+    console.warn('[ApexSim DB] Notice: Native node:sqlite not supported in current Node version. Relational tables running in safe fallback.');
+    return null;
   }
 
-  databaseInstance = new DatabaseSync(DB_PATH);
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
 
-  // Enable foreign keys and WAL mode for high performance and durability
-  databaseInstance.exec('PRAGMA foreign_keys = ON;');
-  databaseInstance.exec('PRAGMA journal_mode = WAL;');
+    databaseInstance = new DatabaseSyncClass(DB_PATH);
 
-  initSchema(databaseInstance);
-  return databaseInstance;
+    // Enable foreign keys and WAL mode for high performance and durability
+    databaseInstance.exec('PRAGMA foreign_keys = ON;');
+    databaseInstance.exec('PRAGMA journal_mode = WAL;');
+
+    initSchema(databaseInstance);
+    return databaseInstance;
+  } catch (err) {
+    console.warn('[ApexSim DB] Warning initializing SQLite instance:', err);
+    return null;
+  }
 }
 
 /**
  * Creates the normalized relational schema.
  */
-function initSchema(db: DatabaseSync) {
+function initSchema(db: any) {
   db.exec(`
     -- 1. Users / Drivers Table
     CREATE TABLE IF NOT EXISTS users (
@@ -222,6 +238,15 @@ export function runRelationalETLMigration(): {
   registrationsCount: number;
 } {
   const db = getRelationalDatabase();
+  if (!db) {
+    return {
+      usersCount: 0,
+      championshipsCount: 0,
+      stagesCount: 0,
+      resultsCount: 0,
+      registrationsCount: 0,
+    };
+  }
 
   const usersFile = path.join(DATA_DIR, 'users.json');
   const champsFile = path.join(DATA_DIR, 'championships.json');
@@ -540,6 +565,25 @@ export function runRelationalETLMigration(): {
  */
 export function getRelationalDatabaseStats() {
   const db = getRelationalDatabase();
+  if (!db) {
+    return {
+      engine: 'SQLite 3 (Offline / JSON Data Store Active)',
+      dbPath: DB_PATH,
+      status: 'STANDBY',
+      tables: {
+        users: 0,
+        championships: 0,
+        stages: 0,
+        race_results: 0,
+        registrations: 0,
+        championship_admins: 0,
+        official_teams: 0,
+        steward_protests: 0,
+        notifications: 0,
+      },
+      lastChecked: new Date().toISOString(),
+    };
+  }
 
   const getCount = (table: string): number => {
     try {
@@ -574,6 +618,7 @@ export function getRelationalDatabaseStats() {
  */
 export function queryDriverStandingsSQL(championshipId: string) {
   const db = getRelationalDatabase();
+  if (!db) return [];
 
   const query = db.prepare(`
     SELECT
@@ -602,6 +647,7 @@ export function queryDriverStandingsSQL(championshipId: string) {
  */
 export function queryConstructorStandingsSQL(championshipId: string) {
   const db = getRelationalDatabase();
+  if (!db) return [];
 
   const query = db.prepare(`
     SELECT

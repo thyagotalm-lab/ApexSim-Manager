@@ -16,6 +16,18 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Prevent unexpected process terminations
+process.on('uncaughtException', (err) => {
+  console.error('[ApexSim Server] Uncaught exception safely handled:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[ApexSim Server] Unhandled rejection safely handled:', reason);
+});
+
+// Immediate health check routes for reverse proxies, Cloudflare and Render
+app.get('/health', (req, res) => res.status(200).send('OK'));
+app.get('/api/health', (req, res) => res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() }));
+
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
