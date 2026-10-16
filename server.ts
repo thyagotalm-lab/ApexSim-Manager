@@ -204,14 +204,24 @@ const readChampionshipsFromFile = (): any[] => {
   return [];
 };
 
-const writeChampionshipsToFile = (champs: any[]) => {
-  try {
-    fs.writeFileSync(CHAMPIONSHIPS_FILE, JSON.stringify(champs, null, 2), 'utf-8');
+let etlSyncTimeout: any = null;
+const scheduleRelationalETL = () => {
+  if (etlSyncTimeout) {
+    clearTimeout(etlSyncTimeout);
+  }
+  etlSyncTimeout = setTimeout(() => {
     try {
       runRelationalETLMigration();
     } catch (e) {
       console.warn('[Relational DB] Auto-sync warning:', e);
     }
+  }, 400);
+};
+
+const writeChampionshipsToFile = (champs: any[]) => {
+  try {
+    fs.writeFileSync(CHAMPIONSHIPS_FILE, JSON.stringify(champs, null, 2), 'utf-8');
+    scheduleRelationalETL();
   } catch (err) {
     console.error('Error writing championships file:', err);
   }
@@ -402,11 +412,7 @@ const writeUsersToFile = (usersList: any[]) => {
       cleaned.unshift(THYAGO_ADMIN_USER);
     }
     fs.writeFileSync(USERS_FILE, JSON.stringify(cleaned, null, 2), 'utf-8');
-    try {
-      runRelationalETLMigration();
-    } catch (e) {
-      console.warn('[Relational DB] Auto-sync users warning:', e);
-    }
+    scheduleRelationalETL();
   } catch (err) {
     console.error('Error writing users file:', err);
   }
@@ -1141,9 +1147,72 @@ async function startServer() {
         middlewareMode: true,
         allowedHosts: true,
         hmr: false,
+        watch: {
+          ignored: [
+            '**/data/**',
+            '**/*.sqlite*',
+            '**/*.sqlite-wal',
+            '**/*.sqlite-shm',
+            '**/*.json',
+            '**/dist/**',
+            '**/.git/**',
+            '**/dev-dist/**',
+          ],
+        },
       },
       appType: 'spa',
     });
+
+    // Clean stub for @vite/client that eliminates WebSocket connections completely in preview environments
+    app.get('/@vite/client', (req, res) => {
+      res.setHeader('Content-Type', 'application/javascript');
+      res.send(`
+        export class ErrorOverlay extends HTMLElement {}
+        if (typeof customElements !== 'undefined' && !customElements.get('vite-error-overlay')) {
+          customElements.define('vite-error-overlay', ErrorOverlay);
+        }
+
+        export function createHotContext() {
+          return {
+            accept() {},
+            prune() {},
+            dispose() {},
+            decline() {},
+            invalidate() {},
+            on() {},
+            off() {},
+            send() {},
+            data: {},
+          };
+        }
+
+        export function injectQuery(url, queryToInject) {
+          return url + (url.includes('?') ? '&' : '?') + queryToInject;
+        }
+
+        const sheetsMap = new Map();
+        export function updateStyle(id, content) {
+          let style = sheetsMap.get(id);
+          if (!style) {
+            style = document.createElement('style');
+            style.setAttribute('type', 'text/css');
+            style.setAttribute('data-vite-dev-id', id);
+            document.head.appendChild(style);
+            sheetsMap.set(id, style);
+          }
+          style.textContent = content;
+        }
+
+        export function removeStyle(id) {
+          const style = sheetsMap.get(id);
+          if (style) {
+            document.head.removeChild(style);
+            sheetsMap.delete(id);
+          }
+        }
+      `);
+    });
+
     app.use(vite.middlewares);
     app.use('*', async (req, res, next) => {
       // Don't intercept API routes or health check
@@ -1154,6 +1223,8 @@ async function startServer() {
         const url = req.originalUrl;
         let template = fs.readFileSync(path.resolve(__dirname, 'index.html'), 'utf-8');
         template = await vite.transformIndexHtml(url, template);
+        // Remove direct @vite/client script tag so browser never attempts WebSocket connection
+        template = template.replace(/<script type="module" src="\/@vite\/client"><\/script>/g, '');
         res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
       } catch (e) {
         next(e);

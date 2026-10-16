@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script>
       // Gracefully ignore harmless WebSocket/HMR disconnect errors per environment guidelines
+      const _origConsoleError = console.error;
+      console.error = function(...args) {
+        const fullMsg = args.map(function(a) { return String(a?.message || a || ''); }).join(' ');
+        if (
+          fullMsg.includes('WebSocket') ||
+          fullMsg.includes('[vite] WebSocket') ||
+          fullMsg.includes('closed without opened') ||
+          fullMsg.includes('failed to connect to websocket')
+        ) {
+          return;
+        }
+        _origConsoleError.apply(console, args);
+      };
+
       window.onerror = function(msg, url, lineNo, columnNo, error) {
         if (
           String(msg).includes('WebSocket') ||

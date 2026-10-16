@@ -2,11 +2,15 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
+import { createRequire } from 'module';
+
+const nodeRequire = createRequire(import.meta.url);
+
 // Using Node.js native SQLite DatabaseSync (available in Node 22.5+)
-// Dynamically imported with top-level await to allow graceful fallback without crashing on older Node versions
+// Safely loaded with fallback for older Node versions without top-level await
 let DatabaseSyncClass: any = null;
 try {
-  const sqliteMod = await import('node:sqlite');
+  const sqliteMod = nodeRequire('node:sqlite');
   DatabaseSyncClass = sqliteMod.DatabaseSync;
 } catch {
   DatabaseSyncClass = null;
@@ -21,7 +25,52 @@ const DB_PATH = path.join(DATA_DIR, 'apexsim.sqlite');
 let databaseInstance: any = null;
 
 /**
- * Initializes and returns the SQLite Relational Database instance.
+ * Safely recovers from a corrupted SQLite file by closing handles, removing corrupted files,
+ * and rebuilding a pristine database from canonical JSON data.
+ */
+export function recoverCorruptedDatabase(): any {
+  console.warn('[ApexSim DB] Malformed database disk image detected. Rebuilding clean SQLite database from canonical JSON data...');
+  if (databaseInstance) {
+    try {
+      databaseInstance.close?.();
+    } catch {
+      // ignore
+    }
+    databaseInstance = null;
+  }
+
+  const filesToRemove = [DB_PATH, `${DB_PATH}-wal`, `${DB_PATH}-shm`];
+  for (const f of filesToRemove) {
+    try {
+      if (fs.existsSync(f)) {
+        fs.unlinkSync(f);
+      }
+    } catch (e) {
+      console.warn(`[ApexSim DB] Note: could not remove file ${f}:`, e);
+    }
+  }
+
+  if (!DatabaseSyncClass) return null;
+
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    databaseInstance = new DatabaseSyncClass(DB_PATH);
+    databaseInstance.exec('PRAGMA foreign_keys = ON;');
+    databaseInstance.exec('PRAGMA journal_mode = WAL;');
+    databaseInstance.exec('PRAGMA synchronous = NORMAL;');
+    databaseInstance.exec('PRAGMA busy_timeout = 5000;');
+    initSchema(databaseInstance);
+    return databaseInstance;
+  } catch (recreateErr) {
+    console.error('[ApexSim DB] Critical error rebuilding database:', recreateErr);
+    return null;
+  }
+}
+
+/**
+ * Initializes and returns the SQLite Relational Database instance with automatic corruption detection.
  */
 export function getRelationalDatabase(): any {
   if (databaseInstance) {
@@ -40,13 +89,33 @@ export function getRelationalDatabase(): any {
 
     databaseInstance = new DatabaseSyncClass(DB_PATH);
 
-    // Enable foreign keys and WAL mode for high performance and durability
+    // Enable foreign keys, WAL mode, normal sync and busy timeout
     databaseInstance.exec('PRAGMA foreign_keys = ON;');
     databaseInstance.exec('PRAGMA journal_mode = WAL;');
+    databaseInstance.exec('PRAGMA synchronous = NORMAL;');
+    databaseInstance.exec('PRAGMA busy_timeout = 5000;');
+
+    // Verify database integrity on open
+    try {
+      const integrity = databaseInstance.prepare('PRAGMA integrity_check(1);').get() as any;
+      if (integrity && integrity.integrity_check && integrity.integrity_check !== 'ok') {
+        console.warn('[ApexSim DB] Database integrity check failed:', integrity.integrity_check);
+        return recoverCorruptedDatabase();
+      }
+    } catch (integrityErr: any) {
+      const errStr = String(integrityErr?.message || integrityErr).toLowerCase();
+      if (errStr.includes('malformed') || errStr.includes('corrupt')) {
+        return recoverCorruptedDatabase();
+      }
+    }
 
     initSchema(databaseInstance);
     return databaseInstance;
-  } catch (err) {
+  } catch (err: any) {
+    const errStr = String(err?.message || err).toLowerCase();
+    if (errStr.includes('malformed') || errStr.includes('corrupt')) {
+      return recoverCorruptedDatabase();
+    }
     console.warn('[ApexSim DB] Warning initializing SQLite instance:', err);
     return null;
   }
@@ -546,9 +615,19 @@ export function runRelationalETLMigration(): {
     console.log(
       `[Relational DB] ETL Migration successful: ${usersCount} users, ${championshipsCount} championships, ${stagesCount} stages, ${resultsCount} race results, ${registrationsCount} registrations.`
     );
-  } catch (txErr) {
-    db.exec('ROLLBACK;');
+  } catch (txErr: any) {
+    try {
+      db.exec('ROLLBACK;');
+    } catch {
+      // ignore rollback failure on malformed db
+    }
     console.error('[Relational DB] ETL Migration transaction rolled back due to error:', txErr);
+
+    const errStr = String(txErr?.message || txErr).toLowerCase();
+    if (errStr.includes('malformed') || errStr.includes('corrupt')) {
+      console.warn('[Relational DB] Corrupted disk image detected in ETL. Triggering auto-recovery...');
+      recoverCorruptedDatabase();
+    }
   }
 
   return {
