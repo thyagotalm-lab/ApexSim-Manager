@@ -95,7 +95,17 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
             src={currentAvatar || MOTORSPORT_PRESET_AVATARS[0].url}
             alt="Foto do perfil"
             referrerPolicy="no-referrer"
-            className="w-14 h-14 rounded-xl object-cover border-2 border-red-500/80 shadow-md bg-slate-950"
+            className="w-14 h-14 rounded-xl object-cover border-2 border-red-500/80 shadow-md bg-slate-950 aspect-square shrink-0 block"
+            style={{
+              width: '56px',
+              height: '56px',
+              minWidth: '56px',
+              minHeight: '56px',
+              maxWidth: '56px',
+              maxHeight: '56px',
+              aspectRatio: '1 / 1',
+              objectFit: 'cover',
+            }}
           />
           <button
             type="button"
@@ -189,7 +199,17 @@ export const AvatarUploader: React.FC<AvatarUploaderProps> = ({
                   src={preset.url}
                   alt={preset.name}
                   referrerPolicy="no-referrer"
-                  className="w-10 h-10 object-cover"
+                  className="w-10 h-10 object-cover aspect-square shrink-0 block"
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    minWidth: '40px',
+                    minHeight: '40px',
+                    maxWidth: '40px',
+                    maxHeight: '40px',
+                    aspectRatio: '1 / 1',
+                    objectFit: 'cover',
+                  }}
                 />
                 {isSelected && (
                   <div className="absolute inset-0 bg-red-600/40 flex items-center justify-center">

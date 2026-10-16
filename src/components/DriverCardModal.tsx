@@ -526,7 +526,15 @@ export const DriverCardModal: React.FC<DriverCardModalProps> = ({
                   src={driver.avatar}
                   alt={driver.name}
                   referrerPolicy="no-referrer"
-                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-slate-700 shadow-xl"
+                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-slate-700 shadow-xl aspect-square shrink-0 block"
+                  style={{
+                    width: '84px',
+                    height: '84px',
+                    minWidth: '84px',
+                    minHeight: '84px',
+                    aspectRatio: '1 / 1',
+                    objectFit: 'cover',
+                  }}
                 />
               </div>
 

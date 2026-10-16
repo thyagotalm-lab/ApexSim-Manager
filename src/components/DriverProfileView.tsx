@@ -99,54 +99,84 @@ export const DriverProfileView: React.FC<DriverProfileViewProps> = ({
   return (
     <div className="space-y-6">
       {/* Driver License Card (FIA / ApexSim Style) */}
-      <div className="relative overflow-hidden rounded-2xl border border-red-900/40 bg-gradient-to-br from-slate-900 via-[#0d131f] to-slate-950 p-6 sm:p-8 shadow-2xl">
+      <div className="relative overflow-hidden rounded-2xl border border-red-900/40 bg-gradient-to-br from-slate-900 via-[#0d131f] to-slate-950 p-4 sm:p-6 md:p-8 shadow-2xl">
         <div className="absolute top-0 right-0 w-80 h-80 bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute inset-0 bg-carbon-pattern opacity-15 pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="relative z-10 flex flex-col md:flex-row items-center md:items-center justify-between gap-6">
           {/* Driver Identity */}
-          <div className="flex items-center gap-5">
-            <div className="relative group">
-              <img
-                src={currentUser.avatar}
-                alt={currentUser.name}
-                referrerPolicy="no-referrer"
-                className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover border-2 border-red-500/80 shadow-xl"
-              />
-              <button
-                type="button"
-                onClick={() => setIsEditing(true)}
-                className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 rounded-2xl flex flex-col items-center justify-center text-white text-[10px] font-medium transition-opacity cursor-pointer"
-                title="Alterar foto de perfil"
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 min-w-0 flex-1 text-center sm:text-left w-full sm:w-auto">
+            {/* Avatar Column with Centered Pilot ID below - Strictly 1:1 square, NEVER squishes into an oval */}
+            <div className="flex flex-col items-center shrink-0">
+              <div
+                className="relative group shrink-0 aspect-square rounded-2xl overflow-hidden border-2 border-red-500/80 shadow-2xl bg-slate-950"
+                style={{
+                  width: '88px',
+                  height: '88px',
+                  minWidth: '88px',
+                  minHeight: '88px',
+                  maxWidth: '88px',
+                  maxHeight: '88px',
+                  aspectRatio: '1 / 1',
+                }}
               >
-                <Camera className="w-5 h-5 mb-0.5" />
-                <span>Trocar</span>
-              </button>
-              {currentUser.gamingId ? (
-                <span className="absolute -bottom-2 -right-2 bg-slate-950 text-red-400 font-mono text-[10px] font-bold px-2 py-0.5 rounded-md border border-slate-700 shadow-md flex items-center gap-1">
-                  <Gamepad2 className="w-3 h-3 text-red-500" />
-                  <span className="max-w-[70px] truncate">{currentUser.gamingId}</span>
-                </span>
-              ) : null}
+                <img
+                  src={currentUser.avatar}
+                  alt={currentUser.name}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover block"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    aspectRatio: '1 / 1',
+                    objectFit: 'cover',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(true)}
+                  className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white text-[10px] font-medium transition-opacity cursor-pointer"
+                  title="Alterar foto de perfil"
+                >
+                  <Camera className="w-5 h-5 mb-0.5" />
+                  <span>Trocar</span>
+                </button>
+              </div>
+
+              {/* Dedicated Pilot ID Badge below image - properly bounded, never overflowed, cut off or spilled out */}
+              {(currentUser.gamingId || currentUser.steamId) && (
+                <div
+                  className="mt-2.5 flex items-center justify-center gap-1.5 bg-slate-950/95 text-red-400 font-mono text-[11px] font-bold px-3 py-1 rounded-lg border border-slate-700/90 shadow-md max-w-[130px] sm:max-w-[150px] w-auto text-center"
+                  title={`ID na plataforma: ${currentUser.gamingId || currentUser.steamId} (${currentUser.gamingPlatform || 'Plataforma'})`}
+                >
+                  <Gamepad2 className="w-3.5 h-3.5 text-red-500 shrink-0" />
+                  <span
+                    className="font-bold text-slate-100 tracking-tight truncate max-w-[95px] sm:max-w-[115px]"
+                    title={currentUser.gamingId || currentUser.steamId}
+                  >
+                    {currentUser.gamingId || currentUser.steamId}
+                  </span>
+                </div>
+              )}
             </div>
 
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="text-xs uppercase font-bold tracking-wider text-red-400">
+            <div className="space-y-1.5 min-w-0 flex-1 w-full sm:w-auto">
+              <div className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 flex-wrap">
+                <span className="text-[11px] sm:text-xs uppercase font-bold tracking-wider text-red-400">
                   Superlicença Virtual ApexSim
                 </span>
-                <span>·</span>
+                <span className="hidden xs:inline text-slate-600">·</span>
                 <span className="text-xs text-slate-400 flex items-center gap-1.5">
                   <CountryFlag country={currentUser.country} size="xs" />
                   <span>{currentUser.country}</span>
                 </span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-white font-display">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-white font-display truncate">
                 {currentUser.name}
               </h1>
 
               {currentUser.teamName ? (
-                <div className="flex items-center gap-2 pt-0.5 text-xs text-slate-300">
+                <div className="flex items-center justify-center sm:justify-start gap-2 pt-0.5 text-xs text-slate-300">
                   <div className="flex items-center gap-1.5 font-semibold text-white">
                     <Shield className="w-3.5 h-3.5 text-red-400 shrink-0" />
                     <span>Time: {currentUser.teamName}</span>
@@ -158,13 +188,13 @@ export const DriverProfileView: React.FC<DriverProfileViewProps> = ({
                   )}
                 </div>
               ) : (
-                <div className="flex items-center gap-1.5 pt-0.5 text-xs text-slate-500">
+                <div className="flex items-center justify-center sm:justify-start gap-1.5 pt-0.5 text-xs text-slate-500">
                   <Shield className="w-3.5 h-3.5 text-slate-600 shrink-0" />
                   <span className="italic">Sem time cadastrado (Piloto Independente)</span>
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center gap-2 pt-1">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
                 <span className="text-[11px] font-semibold bg-red-950 text-red-300 border border-red-800/80 px-2 py-0.5 rounded-full">
                   {currentUser.role === 'admin' ? 'Administrador de Liga' : 'Piloto Participante'}
                 </span>
@@ -178,11 +208,13 @@ export const DriverProfileView: React.FC<DriverProfileViewProps> = ({
                 <span className="text-[11px] text-slate-400 font-mono">
                   SR: <strong className="text-emerald-400">{stats.safetyRating}</strong>
                 </span>
-                {currentUser.gamingId && (
-                  <span className="text-[11px] font-semibold bg-slate-900 text-slate-200 border border-slate-700 px-2 py-0.5 rounded-full flex items-center gap-1.5 font-mono">
-                    <Gamepad2 className="w-3 h-3 text-red-400" />
-                    <span className="text-slate-400">{currentUser.gamingPlatform || 'ID'}:</span>
-                    <strong className="text-white">{currentUser.gamingId}</strong>
+                {(currentUser.gamingId || currentUser.steamId) && (
+                  <span className="text-[11px] font-semibold bg-slate-900 text-slate-200 border border-slate-700 px-2.5 py-0.5 rounded-full flex items-center gap-1.5 font-mono max-w-full">
+                    <Gamepad2 className="w-3 h-3 text-red-400 shrink-0" />
+                    <span className="text-slate-400 shrink-0">{currentUser.gamingPlatform || 'ID'}:</span>
+                    <strong className="text-white truncate" title={currentUser.gamingId || currentUser.steamId}>
+                      {currentUser.gamingId || currentUser.steamId}
+                    </strong>
                   </span>
                 )}
               </div>
@@ -190,7 +222,7 @@ export const DriverProfileView: React.FC<DriverProfileViewProps> = ({
           </div>
 
           {/* Action Buttons: Card Generator, H2H, Edit Profile */}
-          <div className="flex items-center gap-2 flex-wrap self-start md:self-center">
+          <div className="flex items-center justify-center sm:justify-start md:justify-end gap-2 flex-wrap w-full md:w-auto self-center md:self-center">
             {onOpenCardModal && (
               <button
                 type="button"

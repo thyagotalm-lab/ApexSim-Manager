@@ -655,8 +655,16 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
                           src={pilotUser.avatar}
                           alt=""
                           referrerPolicy="no-referrer"
-                          className="w-8 h-8 rounded-full object-cover border-2 shadow-sm"
-                          style={{ borderColor: isReserve ? '#f59e0b' : teamColor }}
+                          className="w-8 h-8 rounded-full object-cover border-2 shadow-sm aspect-square shrink-0 block"
+                          style={{
+                            borderColor: isReserve ? '#f59e0b' : teamColor,
+                            width: '32px',
+                            height: '32px',
+                            minWidth: '32px',
+                            minHeight: '32px',
+                            aspectRatio: '1 / 1',
+                            objectFit: 'cover',
+                          }}
                         />
                       ) : (
                         <div
@@ -838,8 +846,16 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
                             src={pilotUser.avatar}
                             alt=""
                             referrerPolicy="no-referrer"
-                            className="w-7 h-7 rounded-full object-cover border-2 shadow-sm"
-                            style={{ borderColor: isReserve ? '#f59e0b' : teamColor }}
+                            className="w-7 h-7 rounded-full object-cover border-2 shadow-sm aspect-square shrink-0 block"
+                            style={{
+                              borderColor: isReserve ? '#f59e0b' : teamColor,
+                              width: '28px',
+                              height: '28px',
+                              minWidth: '28px',
+                              minHeight: '28px',
+                              aspectRatio: '1 / 1',
+                              objectFit: 'cover',
+                            }}
                           />
                         )}
                         {pilotUser?.country && (
@@ -1085,7 +1101,15 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
                         src={selectedPilotItem.user.avatar}
                         alt={selectedPilotItem.user.name}
                         referrerPolicy="no-referrer"
-                        className="w-8 h-8 rounded-full border border-slate-700 object-cover"
+                        className="w-8 h-8 rounded-full border border-slate-700 object-cover aspect-square shrink-0 block"
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          minWidth: '32px',
+                          minHeight: '32px',
+                          aspectRatio: '1 / 1',
+                          objectFit: 'cover',
+                        }}
                       />
                       <div>
                         <div className="text-xs font-bold text-white flex items-center gap-1.5">
