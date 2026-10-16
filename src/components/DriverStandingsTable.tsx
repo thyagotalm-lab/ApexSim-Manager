@@ -95,61 +95,68 @@ export const DriverStandingsTable: React.FC<DriverStandingsTableProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto">
           {/* Live Search */}
-          <div className="relative flex-1 sm:flex-initial">
+          <div className="relative w-full sm:w-48 md:w-56">
             <input
               type="text"
               placeholder="Buscar piloto ou equipe..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-slate-950 border border-slate-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500 w-full sm:w-56"
+              className="bg-slate-950 border border-slate-700/80 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500 w-full"
             />
             <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
           </div>
 
-          {/* Title Simulator Button */}
-          <button
-            onClick={() => {
-              setSimulatorTargetDriverId(undefined);
-              setIsTitleSimulatorOpen(true);
-            }}
-            title="Calculadora & Simulador Matemático de Título (O que preciso para ser campeão?)"
-            className="flex items-center gap-1.5 bg-gradient-to-r from-amber-600/30 to-amber-700/40 hover:from-amber-600/50 hover:to-amber-700/50 border border-amber-500/70 text-amber-300 px-3 py-1.5 rounded-lg text-xs font-bold shadow-md shadow-amber-950/40 transition-all cursor-pointer whitespace-nowrap shrink-0"
-          >
-            <Calculator className="w-3.5 h-3.5 text-amber-400" />
-            <span className="hidden sm:inline">Simulador de Título</span>
-            <span className="sm:hidden">Título</span>
-          </button>
-
-          {onOpenH2HModal && (
+          {/* Action Buttons: Responsive Flex on mobile, inline on desktop */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap justify-start sm:justify-end">
+            {/* Title Simulator Button */}
             <button
-              onClick={() => onOpenH2HModal()}
-              title="Comparador Direto (Head-to-Head / Rivalidade)"
-              className="flex items-center gap-1.5 bg-amber-950/70 hover:bg-amber-900 border border-amber-800/80 text-amber-300 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0"
+              onClick={() => {
+                setSimulatorTargetDriverId(undefined);
+                setIsTitleSimulatorOpen(true);
+              }}
+              title="Calculadora & Simulador Matemático de Título (O que preciso para ser campeão?)"
+              className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-amber-600/30 to-amber-700/40 hover:from-amber-600/50 hover:to-amber-700/50 border border-amber-500/70 text-amber-300 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold shadow-md shadow-amber-950/40 transition-all cursor-pointer whitespace-nowrap shrink-0"
             >
-              <Swords className="w-3.5 h-3.5 text-amber-400" />
-              <span>Duelo H2H</span>
+              <Calculator className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="hidden sm:inline">Simulador de Título</span>
+              <span className="sm:hidden">Título</span>
             </button>
-          )}
 
-          <button
-            onClick={() => setIsExportImageModalOpen(true)}
-            title="Exportar Tabela em Imagem HD (18:9 e 9:18)"
-            className="flex items-center gap-1.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-md shadow-red-950/40 transition-all cursor-pointer whitespace-nowrap shrink-0"
-          >
-            <ImageIcon className="w-3.5 h-3.5" />
-            <span>Exportar Imagem</span>
-          </button>
+            {onOpenH2HModal && (
+              <button
+                onClick={() => onOpenH2HModal()}
+                title="Comparador Direto (Head-to-Head / Rivalidade)"
+                className="flex items-center justify-center gap-1.5 bg-amber-950/70 hover:bg-amber-900 border border-amber-800/80 text-amber-300 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0"
+              >
+                <Swords className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="hidden sm:inline">Duelo H2H</span>
+                <span className="sm:hidden">H2H</span>
+              </button>
+            )}
 
-          <button
-            onClick={exportCSV}
-            title="Exportar CSV da Tabela"
-            className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">CSV</span>
-          </button>
+            {/* Exportar Imagem Button */}
+            <button
+              onClick={() => setIsExportImageModalOpen(true)}
+              title="Exportar Tabela em Imagem HD (18:9 e 9:18)"
+              className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold shadow-md shadow-red-950/40 transition-all cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Exportar Imagem</span>
+              <span className="sm:hidden">Imagem</span>
+            </button>
+
+            {/* Exportar CSV Button */}
+            <button
+              onClick={exportCSV}
+              title="Exportar CSV da Tabela"
+              className="flex items-center justify-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <Download className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">CSV</span>
+            </button>
+          </div>
         </div>
       </div>
 

@@ -60,10 +60,11 @@ export const ConstructorStandingsTable: React.FC = () => {
           <button
             onClick={() => setIsExportImageModalOpen(true)}
             title="Exportar Tabela de Construtores em Imagem HD (18:9 e 9:18)"
-            className="flex items-center gap-1.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-md shadow-red-950/40 transition-all cursor-pointer whitespace-nowrap"
+            className="flex items-center justify-center gap-1.5 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold shadow-md shadow-red-950/40 transition-all cursor-pointer whitespace-nowrap shrink-0"
           >
-            <ImageIcon className="w-3.5 h-3.5" />
-            <span>Exportar Imagem</span>
+            <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">Exportar Imagem</span>
+            <span className="sm:hidden">Imagem</span>
           </button>
         </div>
       </div>
