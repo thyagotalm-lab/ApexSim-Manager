@@ -90,6 +90,36 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
     });
   }, [users, championships]);
 
+  // Current logged in driver data - guaranteed 100% synchronized with ground-truth table calculation
+  const myDriver = useMemo(() => {
+    if (!currentUser) return null;
+    return (
+      allDrivers.find(
+        (d) =>
+          d.id === currentUser.id ||
+          (d.email && d.email.toLowerCase().trim() === currentUser.email?.toLowerCase().trim())
+      ) || {
+        ...currentUser,
+        stats: computePilotStatsFromChampionships(currentUser, championships),
+      }
+    );
+  }, [allDrivers, currentUser, championships]);
+
+  // Find exact position in the official overall Sim Rating ranking
+  const myOverallRank = useMemo(() => {
+    if (!myDriver) return null;
+    const sortedByRating = [...allDrivers].sort((a, b) => (b.stats.simRating || 0) - (a.stats.simRating || 0));
+    const idx = sortedByRating.findIndex(
+      (d) =>
+        d.id === myDriver.id ||
+        (d.email && d.email.toLowerCase().trim() === myDriver.email?.toLowerCase().trim())
+    );
+    return idx >= 0 ? idx + 1 : null;
+  }, [allDrivers, myDriver]);
+
+  const mySimRating = myDriver?.stats?.simRating ?? DEFAULT_SIM_RATING;
+  const myTier = getSimRatingTier(mySimRating);
+
   // Filtered & Sorted Drivers
   const rankedDrivers = useMemo(() => {
     return allDrivers
@@ -186,21 +216,37 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
             </p>
           </div>
 
-          {currentUser && (
-            <div className="shrink-0 bg-slate-950/80 border border-slate-800 rounded-xl p-3.5 flex items-center gap-3 shadow-lg">
+          {currentUser && myDriver && (
+            <div className="shrink-0 bg-slate-950/90 border border-slate-800 rounded-xl p-3.5 flex items-center gap-3 shadow-lg">
               <img
                 src={currentUser.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250'}
                 alt={currentUser.name}
-                className="w-12 h-12 rounded-full object-cover border-2 border-red-500 shadow"
+                className="w-12 h-12 rounded-full object-cover border-2 border-red-500 shadow aspect-square shrink-0 block"
+                style={{
+                  width: '48px',
+                  height: '48px',
+                  minWidth: '48px',
+                  minHeight: '48px',
+                  aspectRatio: '1 / 1',
+                  objectFit: 'cover',
+                }}
               />
               <div className="min-w-0">
-                <div className="text-[10px] uppercase font-bold text-slate-400">Sua Pontuação</div>
-                <div className="text-lg font-black text-white font-mono-numbers flex items-center gap-1.5">
-                  <span>{currentUser.stats?.simRating || DEFAULT_SIM_RATING}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Sua Pontuação</span>
+                  {myOverallRank && (
+                    <span className="text-[9px] font-mono font-bold px-1.5 py-0.2 rounded bg-red-950 text-red-300 border border-red-800/80">
+                      P{myOverallRank} Geral
+                    </span>
+                  )}
+                </div>
+                <div className="text-lg sm:text-xl font-black text-white font-mono-numbers flex items-center gap-1.5">
+                  <span>{mySimRating}</span>
                   <span className="text-[11px] font-bold text-red-400">pts</span>
                 </div>
-                <div className="text-[10px] font-semibold text-slate-300">
-                  Tier: {getSimRatingTier(currentUser.stats?.simRating || DEFAULT_SIM_RATING).name}
+                <div className="text-[10px] font-semibold text-slate-300 flex items-center gap-1">
+                  <span>{myTier.badgeIcon}</span>
+                  <span>Tier: {myTier.name}</span>
                 </div>
               </div>
             </div>
@@ -567,7 +613,12 @@ export const SimRatingRankingView: React.FC<SimRatingRankingViewProps> = ({
               ) : (
                 rankedDrivers.map((driver, index) => {
                   const position = index + 1;
-                  const isCurrent = currentUser?.id === driver.id;
+                  const isCurrent = Boolean(
+                    currentUser && (
+                      currentUser.id === driver.id ||
+                      (currentUser.email && driver.email && currentUser.email.toLowerCase().trim() === driver.email.toLowerCase().trim())
+                    )
+                  );
                   const tier = getSimRatingTier(driver.stats.simRating);
 
                   return (

@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
 import { NotificationBell } from './NotificationBell';
 import { PWAInstallButton } from './PWAInstallButton';
+import { computePilotStatsFromChampionships } from '../utils/driverStats';
 
 interface TopBarProps {
   onOpenCreateModal: () => void;
@@ -26,6 +27,13 @@ export const TopBar: React.FC<TopBarProps> = ({
     currentUser.role === 'admin' ||
     championships.some((c) => isUserLeagueAdmin(c.id, currentUser.id))
   ) : false;
+
+  // Synchronized dynamic Sim Rating calculation matching the official table exactly
+  const userSimRating = React.useMemo(() => {
+    if (!currentUser) return 3000;
+    const computed = computePilotStatsFromChampionships(currentUser, championships);
+    return computed.simRating ?? currentUser.stats?.simRating ?? 3000;
+  }, [currentUser, championships]);
 
   return (
     <div className="sticky top-0 z-40 w-full bg-[#080c14]/95 backdrop-blur-md border-b border-slate-800/90 shadow-md shadow-black/40">
@@ -96,7 +104,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               >
                 <Zap className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition-transform" />
                 <span className="text-[11px] text-slate-400">Sim Rating:</span>
-                <strong className="text-white font-mono-numbers">{currentUser.stats?.simRating || 3000}</strong>
+                <strong className="text-white font-mono-numbers">{userSimRating}</strong>
               </button>
 
               <button
