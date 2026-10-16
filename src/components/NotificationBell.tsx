@@ -101,7 +101,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigateTo
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 rounded-lg bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-red-500"
+        className="relative p-1.5 sm:p-2 h-8 w-8 sm:h-auto sm:w-auto flex items-center justify-center rounded-lg bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700/80 transition-all cursor-pointer focus:outline-none focus:ring-1 focus:ring-red-500 shrink-0"
         title="Central de Notificações"
       >
         <Bell className={`w-4 h-4 ${unreadCount > 0 ? 'text-amber-400 animate-wiggle' : 'text-slate-400'}`} />
@@ -115,7 +115,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({ onNavigateTo
 
       {/* Floating Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-[#090d16]/95 backdrop-blur-xl border border-slate-800 shadow-[0_12px_40px_rgba(0,0,0,0.8)] z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-x-2.5 top-12 sm:absolute sm:inset-auto sm:right-0 sm:top-auto sm:mt-2 w-auto sm:w-96 max-w-sm sm:max-w-none mx-auto sm:mx-0 rounded-2xl bg-[#090d16]/95 backdrop-blur-xl border border-slate-800 shadow-[0_12px_40px_rgba(0,0,0,0.8)] z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
           {/* Header */}
           <div className="p-3.5 bg-slate-900/70 border-b border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-2">

@@ -73,12 +73,11 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
           type="button"
           onClick={handleInstallClick}
           disabled={isInstalling}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white text-xs font-bold shadow-md shadow-red-950/40 transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-red-500/40 ${className}`}
+          className={`flex items-center justify-center gap-1.5 p-1.5 sm:px-3 sm:py-1.5 h-8 w-8 sm:h-auto sm:w-auto rounded-lg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white text-xs font-bold shadow-md shadow-red-950/40 transition-all cursor-pointer whitespace-nowrap active:scale-95 border border-red-500/40 shrink-0 ${className}`}
           title="Instalar ApexSim como aplicativo no seu dispositivo (PWA)"
         >
-          <Download className="w-3.5 h-3.5 animate-pulse text-white" />
+          <Download className="w-3.5 h-3.5 animate-pulse text-white shrink-0" />
           <span className="hidden sm:inline">Instalar App</span>
-          <span className="sm:hidden">App</span>
           <span className="hidden md:inline-block text-[9px] bg-red-950/80 text-red-200 border border-red-400/40 px-1 py-0.2 rounded font-mono uppercase">
             PWA
           </span>

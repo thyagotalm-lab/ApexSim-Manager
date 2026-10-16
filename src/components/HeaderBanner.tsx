@@ -76,34 +76,34 @@ export const HeaderBanner: React.FC<HeaderBannerProps> = ({ onOpenCreateModal, o
 
         {/* League Header Info Pill Container */}
         {activeChampionship ? (
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-2 sm:gap-3 text-xs">
-            <div className="bg-slate-900/80 border border-slate-800 text-slate-300 px-3 py-1.5 rounded-lg flex items-center gap-2">
-              <Trophy className="w-3.5 h-3.5 text-amber-400" />
-              <span className="font-semibold text-white">{activeChampionship.name}</span>
+          <div className="mt-4 sm:mt-5 flex flex-wrap items-center justify-center gap-1.5 sm:gap-2.5 text-xs w-full max-w-full px-2">
+            <div className="bg-slate-900/80 border border-slate-800 text-slate-300 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg flex items-center gap-1.5 max-w-full text-[11px] sm:text-xs">
+              <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span className="font-semibold text-white truncate max-w-[180px] sm:max-w-none">{activeChampionship.name}</span>
             </div>
 
-            <div className="bg-slate-900/80 border border-slate-800 text-slate-300 px-3 py-1.5 rounded-lg flex items-center gap-2">
-              <Gamepad2 className="w-3.5 h-3.5 text-red-400" />
-              <span>Simulador: <strong className="text-white">{activeChampionship.simulator}</strong></span>
+            <div className="bg-slate-900/80 border border-slate-800 text-slate-300 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg flex items-center gap-1.5 max-w-full text-[11px] sm:text-xs">
+              <Gamepad2 className="w-3.5 h-3.5 text-red-400 shrink-0" />
+              <span className="truncate">Simulador: <strong className="text-white">{activeChampionship.simulator}</strong></span>
             </div>
 
-            <div className="bg-slate-900/80 border border-slate-800 text-slate-300 px-3 py-1.5 rounded-lg flex items-center gap-2">
-              <Flag className="w-3.5 h-3.5 text-red-400" />
+            <div className="bg-slate-900/80 border border-slate-800 text-slate-300 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg flex items-center gap-1.5 max-w-full text-[11px] sm:text-xs">
+              <Flag className="w-3.5 h-3.5 text-red-400 shrink-0" />
               <span>{activeChampionship.stages.length} Etapas</span>
             </div>
 
-            <div className="bg-slate-900/80 border border-slate-800 text-slate-300 px-3 py-1.5 rounded-lg flex items-center gap-2">
-              <Users className="w-3.5 h-3.5 text-emerald-400" />
+            <div className="bg-slate-900/80 border border-slate-800 text-slate-300 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg flex items-center gap-1.5 max-w-full text-[11px] sm:text-xs">
+              <Users className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
               <span>{activeChampionship.registrations.filter(r => r.status === 'APROVADO').length} / {activeChampionship.maxGrid} Pilotos</span>
             </div>
 
             {isAdmin && (
               <button
                 onClick={onOpenAdminsModal}
-                className="bg-red-950/80 hover:bg-red-900/90 text-red-200 border border-red-800/80 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors font-medium cursor-pointer"
+                className="bg-red-950/80 hover:bg-red-900/90 text-red-200 border border-red-800/80 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg flex items-center gap-1.5 transition-colors font-medium cursor-pointer text-[11px] sm:text-xs max-w-full shrink-0"
                 title="Adicionar outros usuários como administradores desta liga"
               >
-                <Shield className="w-3.5 h-3.5 text-red-400" />
+                <Shield className="w-3.5 h-3.5 text-red-400 shrink-0" />
                 <span>Adms da Liga ({leagueAdmins.length})</span>
               </button>
             )}
@@ -111,9 +111,9 @@ export const HeaderBanner: React.FC<HeaderBannerProps> = ({ onOpenCreateModal, o
             {isLeagueAdminOfAny && (
               <button
                 onClick={onOpenCreateModal}
-                className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-medium px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 shadow-md shadow-red-950 transition-all cursor-pointer"
+                className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-medium px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-lg flex items-center gap-1.5 shadow-md shadow-red-950 transition-all cursor-pointer text-[11px] sm:text-xs max-w-full shrink-0"
               >
-                <Zap className="w-3.5 h-3.5" />
+                <Zap className="w-3.5 h-3.5 shrink-0" />
                 <span>+ Criar Campeonato</span>
               </button>
             )}
