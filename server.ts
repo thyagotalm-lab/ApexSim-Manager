@@ -537,223 +537,277 @@ app.post('/api/users/sync', (req, res) => {
 });
 
 // API: Update user
-app.put('/api/users/:id', (req, res) => {
-  const { id } = req.params;
-  const updates = req.body || {};
-  const users = readUsersFromFile();
-  const idx = users.findIndex((u) => u.id === id);
+const handleUpdateUser = (req: any, res: any) => {
+  try {
+    const rawId = req.params?.id || req.body?.newId || req.body?.id || req.body?.oldId || req.query?.id;
+    const id = decodeURIComponent(rawId || '').trim();
+    const updates = req.body || {};
+    const users = readUsersFromFile();
 
-  if (idx < 0) {
-    return res.status(404).json({ success: false, error: 'Usuário não encontrado' });
-  }
+    const cleanId = id.toLowerCase().trim();
+    const cleanUpdatesEmail = (updates.email || '').toString().toLowerCase().trim();
 
-  const oldUser = users[idx];
-  const oldName = oldUser.name;
-  const targetEmail = (oldUser.email || '').toLowerCase().trim();
-  const newName = updates.name && updates.name.trim() ? updates.name.trim() : oldName;
+    let idx = users.findIndex(
+      (u) =>
+        (u.id && u.id.trim() === id) ||
+        (u.id && u.id.toLowerCase().trim() === cleanId) ||
+        (u.email && u.email.toLowerCase().trim() === cleanId) ||
+        (cleanUpdatesEmail && u.email && u.email.toLowerCase().trim() === cleanUpdatesEmail)
+    );
 
-  const isThyago = oldUser.email.toLowerCase().trim() === 'thyago.talm@gmail.com';
-
-  // Security: Email and Password cannot be modified through master profile updates
-  delete updates.email;
-  delete updates.password;
-
-  const targetNewId = (updates.newId || updates.id || id).toString().trim();
-
-  // If changing ID:
-  if (targetNewId !== id) {
-    if (isThyago) {
-      return res.status(403).json({ success: false, error: 'O ID do Admin Master Root é protegido e não pode ser alterado.' });
+    if (idx < 0) {
+      // If user is not yet in users.json, create/register them seamlessly
+      const targetNewId = (updates.newId || updates.id || id).toString().trim();
+      const newUser = {
+        id: targetNewId,
+        name: updates.name && updates.name.trim() ? updates.name.trim() : (updates.email ? updates.email.split('@')[0] : 'Piloto'),
+        email: updates.email || `${targetNewId}@apexsim.pilot`,
+        avatar: updates.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+        role: updates.role || 'pilot',
+        country: updates.country || 'Brasil 🇧🇷',
+        gamingPlatform: updates.gamingPlatform || 'Steam (PC)',
+        gamingId: updates.gamingId || '',
+        steamId: updates.gamingId || updates.steamId || '',
+        discordTag: updates.discordTag || '',
+        racingNumber: updates.racingNumber || 1,
+        teamName: updates.teamName || '',
+        teamTag: updates.teamTag || '',
+        stats: updates.stats || {
+          races: 0,
+          wins: 0,
+          podiums: 0,
+          poles: 0,
+          fastestLaps: 0,
+          points: 0,
+          dnfs: 0,
+          safetyRating: 'B 3.50',
+          simRating: 3000,
+        },
+        ...updates,
+      };
+      delete newUser.newId;
+      users.push(newUser);
+      writeUsersToFile(users);
+      return res.json({ success: true, user: newUser });
     }
-    // Check collision
-    const collision = users.some((u) => u.id === targetNewId && u.id !== id);
-    if (collision) {
-      return res.status(400).json({ success: false, error: `O ID "${targetNewId}" já está em uso por outro usuário.` });
+
+    const oldUser = users[idx];
+    const oldName = oldUser.name;
+    const targetEmail = (oldUser.email || '').toLowerCase().trim();
+    const newName = updates.name && updates.name.trim() ? updates.name.trim() : oldName;
+
+    const isThyago = oldUser.email && oldUser.email.toLowerCase().trim() === 'thyago.talm@gmail.com';
+
+    // Security: Email and Password cannot be modified through master profile updates
+    delete updates.email;
+    delete updates.password;
+
+    const targetNewId = (updates.newId || updates.id || id).toString().trim();
+
+    // If changing ID:
+    if (targetNewId !== id && targetNewId.toLowerCase() !== oldUser.id.toLowerCase()) {
+      if (isThyago) {
+        return res.status(403).json({ success: false, error: 'O ID do Admin Master Root é protegido e não pode ser alterado.' });
+      }
+      // Check collision
+      const collision = users.some((u) => u.id === targetNewId && u.id !== id);
+      if (collision) {
+        return res.status(400).json({ success: false, error: `O ID "${targetNewId}" já está em uso por outro usuário.` });
+      }
     }
-  }
 
-  const updatedId = (!isThyago && targetNewId) ? targetNewId : id;
+    const updatedId = (!isThyago && targetNewId) ? targetNewId : (oldUser.id || id);
 
-  const updatedUser = {
-    ...users[idx],
-    ...updates,
-    id: updatedId,
-    name: newName,
-    role: isThyago ? 'admin' : (updates.role || users[idx].role || 'pilot'),
-    administeredLeagueIds: updates.administeredLeagueIds !== undefined ? updates.administeredLeagueIds : (users[idx].administeredLeagueIds || []),
-    stats: updates.stats ? { ...users[idx].stats, ...updates.stats } : users[idx].stats,
-  };
+    const updatedUser = {
+      ...users[idx],
+      ...updates,
+      id: updatedId,
+      name: newName,
+      role: isThyago ? 'admin' : (updates.role || users[idx].role || 'pilot'),
+      administeredLeagueIds: updates.administeredLeagueIds !== undefined ? updates.administeredLeagueIds : (users[idx].administeredLeagueIds || []),
+      stats: updates.stats ? { ...users[idx].stats, ...updates.stats } : users[idx].stats,
+    };
+    delete updatedUser.newId;
 
-  users[idx] = updatedUser;
-  writeUsersToFile(users);
+    users[idx] = updatedUser;
+    writeUsersToFile(users);
 
-  // If ID or name changed, propagate across ALL championships data: registrations, stage results, awards, protests
-  if (updatedId !== id || updates.name) {
-    try {
-      const champs = readChampionshipsFromFile();
-      let champModified = false;
+    // If ID or name changed, propagate across ALL championships data: registrations, stage results, awards, protests
+    if (updatedId !== id || updates.name) {
+      try {
+        const champs = readChampionshipsFromFile();
+        let champModified = false;
 
-      champs.forEach((champ: any) => {
-        // 1. Update pilot registrations
-        if (Array.isArray(champ.registrations)) {
-          champ.registrations.forEach((reg: any) => {
-            const regEmail = (reg.userEmail || '').toLowerCase().trim();
-            const matchesUser =
-              reg.userId === id ||
-              reg.userId === updatedId ||
-              (targetEmail && regEmail === targetEmail) ||
-              (oldName && reg.userName === oldName);
+        champs.forEach((champ: any) => {
+          // 1. Update pilot registrations
+          if (Array.isArray(champ.registrations)) {
+            champ.registrations.forEach((reg: any) => {
+              const regEmail = (reg.userEmail || '').toLowerCase().trim();
+              const matchesUser =
+                reg.userId === id ||
+                reg.userId === updatedId ||
+                (targetEmail && regEmail === targetEmail) ||
+                (oldName && reg.userName === oldName);
 
-            if (matchesUser) {
-              reg.userId = updatedId;
-              if (newName) {
-                reg.userName = newName;
-              }
-              champModified = true;
-            }
-          });
-        }
-
-        // 2. Update league admin lists
-        if (Array.isArray(champ.adminIds)) {
-          const aIdx = champ.adminIds.indexOf(id);
-          if (aIdx >= 0) {
-            champ.adminIds[aIdx] = updatedId;
-            champModified = true;
-          }
-        }
-
-        // 3. Update stage rounds, race results, awards, and protests
-        if (Array.isArray(champ.stages)) {
-          champ.stages.forEach((stage: any) => {
-            // 3a. Race Results in each stage
-            if (Array.isArray(stage.results)) {
-              stage.results.forEach((res: any) => {
-                if (
-                  res.driverId === id ||
-                  res.driverId === updatedId ||
-                  (oldName && res.driverName === oldName)
-                ) {
-                  res.driverId = updatedId;
-                  if (newName) {
-                    res.driverName = newName;
-                  }
-                  champModified = true;
-                }
-              });
-            }
-
-            // 3a-2. Sprint Race Results in each stage
-            if (Array.isArray(stage.sprintResults)) {
-              stage.sprintResults.forEach((res: any) => {
-                if (
-                  res.driverId === id ||
-                  res.driverId === updatedId ||
-                  (oldName && res.driverName === oldName)
-                ) {
-                  res.driverId = updatedId;
-                  if (newName) {
-                    res.driverName = newName;
-                  }
-                  champModified = true;
-                }
-              });
-            }
-
-            // 3b. Pole Position & Fastest Lap driver IDs
-            if (stage.poleDriverId === id) {
-              stage.poleDriverId = updatedId;
-              champModified = true;
-            }
-            if (stage.fastestLapDriverId === id) {
-              stage.fastestLapDriverId = updatedId;
-              champModified = true;
-            }
-            if (stage.sprintPoleDriverId === id) {
-              stage.sprintPoleDriverId = updatedId;
-              champModified = true;
-            }
-            if (stage.sprintFastestLapDriverId === id) {
-              stage.sprintFastestLapDriverId = updatedId;
-              champModified = true;
-            }
-
-            // 3c. Driver of the day awards
-            if (stage.driverOfTheDay) {
-              if (
-                stage.driverOfTheDay.winnerDriverId === id ||
-                (oldName && stage.driverOfTheDay.winnerDriverName === oldName)
-              ) {
-                stage.driverOfTheDay.winnerDriverId = updatedId;
+              if (matchesUser) {
+                reg.userId = updatedId;
                 if (newName) {
-                  stage.driverOfTheDay.winnerDriverName = newName;
+                  reg.userName = newName;
                 }
                 champModified = true;
               }
-            }
+            });
+          }
 
-            // 3d. Protests & Stewards
-            if (Array.isArray(stage.protests)) {
-              stage.protests.forEach((protest: any) => {
-                if (protest.claimantId === id || (oldName && protest.claimantName === oldName)) {
-                  protest.claimantId = updatedId;
-                  if (newName) protest.claimantName = newName;
-                  champModified = true;
-                }
-                if (protest.accusedId === id || (oldName && protest.accusedName === oldName)) {
-                  protest.accusedId = updatedId;
-                  if (newName) protest.accusedName = newName;
-                  champModified = true;
-                }
-                if (Array.isArray(protest.stewards)) {
-                  protest.stewards.forEach((stew: any) => {
-                    if (stew.stewardId === id || (oldName && stew.stewardName === oldName)) {
-                      stew.stewardId = updatedId;
-                      if (newName) stew.stewardName = newName;
-                      champModified = true;
+          // 2. Update league admin lists
+          if (Array.isArray(champ.adminIds)) {
+            const aIdx = champ.adminIds.indexOf(id);
+            if (aIdx >= 0) {
+              champ.adminIds[aIdx] = updatedId;
+              champModified = true;
+            }
+          }
+
+          // 3. Update stage rounds, race results, awards, and protests
+          if (Array.isArray(champ.stages)) {
+            champ.stages.forEach((stage: any) => {
+              // 3a. Race Results in each stage
+              if (Array.isArray(stage.results)) {
+                stage.results.forEach((res: any) => {
+                  if (
+                    res.driverId === id ||
+                    res.driverId === updatedId ||
+                    (oldName && res.driverName === oldName)
+                  ) {
+                    res.driverId = updatedId;
+                    if (newName) {
+                      res.driverName = newName;
                     }
-                  });
+                    champModified = true;
+                  }
+                });
+              }
+
+              // 3a-2. Sprint Race Results in each stage
+              if (Array.isArray(stage.sprintResults)) {
+                stage.sprintResults.forEach((res: any) => {
+                  if (
+                    res.driverId === id ||
+                    res.driverId === updatedId ||
+                    (oldName && res.driverName === oldName)
+                  ) {
+                    res.driverId = updatedId;
+                    if (newName) {
+                      res.driverName = newName;
+                    }
+                    champModified = true;
+                  }
+                });
+              }
+
+              // 3b. Pole Position & Fastest Lap driver IDs
+              if (stage.poleDriverId === id) {
+                stage.poleDriverId = updatedId;
+                champModified = true;
+              }
+              if (stage.fastestLapDriverId === id) {
+                stage.fastestLapDriverId = updatedId;
+                champModified = true;
+              }
+              if (stage.sprintPoleDriverId === id) {
+                stage.sprintPoleDriverId = updatedId;
+                champModified = true;
+              }
+              if (stage.sprintFastestLapDriverId === id) {
+                stage.sprintFastestLapDriverId = updatedId;
+                champModified = true;
+              }
+
+              // 3c. Driver of the day awards
+              if (stage.driverOfTheDay) {
+                if (
+                  stage.driverOfTheDay.winnerDriverId === id ||
+                  (oldName && stage.driverOfTheDay.winnerDriverName === oldName)
+                ) {
+                  stage.driverOfTheDay.winnerDriverId = updatedId;
+                  if (newName) {
+                    stage.driverOfTheDay.winnerDriverName = newName;
+                  }
+                  champModified = true;
                 }
-              });
-            }
-          });
-        }
+              }
 
-        // 4. Update root championship protests (RaceProtest[])
-        if (Array.isArray(champ.protests)) {
-          champ.protests.forEach((protest: any) => {
-            if (
-              protest.plaintiffId === id ||
-              protest.plaintiffId === updatedId ||
-              (oldName && protest.plaintiffName === oldName)
-            ) {
-              protest.plaintiffId = updatedId;
-              if (newName) protest.plaintiffName = newName;
-              champModified = true;
-            }
-            if (
-              protest.defendantId === id ||
-              protest.defendantId === updatedId ||
-              (oldName && protest.defendantName === oldName)
-            ) {
-              protest.defendantId = updatedId;
-              if (newName) protest.defendantName = newName;
-              champModified = true;
-            }
-          });
-        }
-      });
+              // 3d. Protests & Stewards
+              if (Array.isArray(stage.protests)) {
+                stage.protests.forEach((protest: any) => {
+                  if (protest.claimantId === id || (oldName && protest.claimantName === oldName)) {
+                    protest.claimantId = updatedId;
+                    if (newName) protest.claimantName = newName;
+                    champModified = true;
+                  }
+                  if (protest.accusedId === id || (oldName && protest.accusedName === oldName)) {
+                    protest.accusedId = updatedId;
+                    if (newName) protest.accusedName = newName;
+                    champModified = true;
+                  }
+                  if (Array.isArray(protest.stewards)) {
+                    protest.stewards.forEach((stew: any) => {
+                      if (stew.stewardId === id || (oldName && stew.stewardName === oldName)) {
+                        stew.stewardId = updatedId;
+                        if (newName) stew.stewardName = newName;
+                        champModified = true;
+                      }
+                    });
+                  }
+                });
+              }
+            });
+          }
 
-      if (champModified) {
-        writeChampionshipsToFile(champs);
+          // 4. Update root championship protests (RaceProtest[])
+          if (Array.isArray(champ.protests)) {
+            champ.protests.forEach((protest: any) => {
+              if (
+                protest.plaintiffId === id ||
+                protest.plaintiffId === updatedId ||
+                (oldName && protest.plaintiffName === oldName)
+              ) {
+                protest.plaintiffId = updatedId;
+                if (newName) protest.plaintiffName = newName;
+                champModified = true;
+              }
+              if (
+                protest.defendantId === id ||
+                protest.defendantId === updatedId ||
+                (oldName && protest.defendantName === oldName)
+              ) {
+                protest.defendantId = updatedId;
+                if (newName) protest.defendantName = newName;
+                champModified = true;
+              }
+            });
+          }
+        });
+
+        if (champModified) {
+          writeChampionshipsToFile(champs);
+        }
+      } catch (champErr) {
+        console.error('Error updating championships references for user:', champErr);
       }
-    } catch (champErr) {
-      console.error('Error updating championships references for user:', champErr);
     }
-  }
 
-  res.json({ success: true, user: updatedUser, users });
-});
+    return res.json({ success: true, user: updatedUser });
+  } catch (err: any) {
+    console.error('Error in PUT /api/users/:id:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Erro ao processar atualização do piloto no servidor.' });
+  }
+};
+
+app.put('/api/users/:id', handleUpdateUser);
+app.put('/api/users', handleUpdateUser);
+app.post('/api/users/update', handleUpdateUser);
+app.post('/api/users/:id', handleUpdateUser);
 
 // API: Delete user permanently across all server records
 app.delete('/api/users/:id', (req, res) => {
@@ -1100,6 +1154,23 @@ app.get('/api/relational/standings/:championshipId', (req, res) => {
   }
 });
 
+// Catch-all for undefined /api routes ensuring JSON is ALWAYS returned (never HTML)
+app.all(['/api', '/api/*'], (req, res) => {
+  res.status(404).json({ success: false, error: `Endpoint da API não encontrado: ${req.method} ${req.originalUrl}` });
+});
+
+// Global API error handler ensuring JSON is ALWAYS returned for any API failures
+app.use((err: any, req: any, res: any, next: any) => {
+  if (req.originalUrl && req.originalUrl.startsWith('/api')) {
+    console.error('[ApexSim API Error]', err);
+    return res.status(err.status || 500).json({
+      success: false,
+      error: err.message || 'Erro interno no servidor da API.',
+    });
+  }
+  next(err);
+});
+
 // Serve frontend with Vite middlewares in dev, or static files in production
 async function startServer() {
   // Initialize Relational Database Engine and run initial ETL migration
@@ -1135,7 +1206,10 @@ async function startServer() {
   if (isProduction && hasDist) {
     app.use(express.static(path.resolve(__dirname, 'dist')));
     app.get('*', (req, res, next) => {
-      if (req.originalUrl.startsWith('/api') || req.originalUrl === '/health') {
+      if (req.originalUrl.startsWith('/api')) {
+        return res.status(404).json({ success: false, error: `Endpoint da API não encontrado: ${req.method} ${req.originalUrl}` });
+      }
+      if (req.originalUrl === '/health') {
         return next();
       }
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
@@ -1216,7 +1290,10 @@ async function startServer() {
     app.use(vite.middlewares);
     app.use('*', async (req, res, next) => {
       // Don't intercept API routes or health check
-      if (req.originalUrl.startsWith('/api') || req.originalUrl === '/health') {
+      if (req.originalUrl.startsWith('/api')) {
+        return res.status(404).json({ success: false, error: `Endpoint da API não encontrado: ${req.method} ${req.originalUrl}` });
+      }
+      if (req.originalUrl === '/health') {
         return next();
       }
       try {

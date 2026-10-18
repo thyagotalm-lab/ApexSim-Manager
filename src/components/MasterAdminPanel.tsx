@@ -32,7 +32,7 @@ import { useChampionships } from '../context/ChampionshipContext';
 import { User } from '../types';
 import { getSimRatingTier } from '../utils/simRating';
 import { CountryFlag } from './CountryFlag';
-import { isFakeMockUser, isDeletedUserAccount } from '../services/userService';
+import { isFakeMockUser, isDeletedUserAccount, safeParseResponseJson } from '../services/userService';
 import { RelationalDbModal } from './RelationalDbModal';
 
 interface MasterAdminPanelProps {
@@ -84,9 +84,11 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
   // Direct backend fetch helper
   const refreshBackendUsers = async () => {
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch('/api/users', {
+        headers: { Accept: 'application/json' },
+      });
       if (res.ok) {
-        const data = await res.json();
+        const data = await safeParseResponseJson<any>(res);
         if (data && Array.isArray(data.users)) {
           setBackendUsers(data.users.filter((u: User) => !isFakeMockUser(u) && !isDeletedUserAccount(u)));
         }

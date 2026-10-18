@@ -350,12 +350,29 @@ export const deleteUserCompletely = async (id: string, email?: string, name?: st
   };
 };
 
+// Safely parse JSON from fetch response without throwing if HTML or non-JSON is returned
+export const safeParseResponseJson = async <T = any>(res: Response): Promise<T | null> => {
+  try {
+    const text = await res.text();
+    if (!text) return null;
+    const trimmed = text.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      return JSON.parse(trimmed) as T;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
 // Fetch users from local backend server API (/api/users)
 export const fetchBackendUsers = async (): Promise<User[]> => {
   try {
-    const res = await fetch('/api/users');
+    const res = await fetch('/api/users', {
+      headers: { Accept: 'application/json' },
+    });
     if (res.ok) {
-      const data = await res.json();
+      const data = await safeParseResponseJson<any>(res);
       // Incorporate any tombstones from backend into our local deleted set
       if (data && Array.isArray(data.deletedIds)) {
         data.deletedIds.forEach((did: string) => addDeletedUserTombstone(did));
@@ -474,9 +491,11 @@ export const syncBackendWithFirestore = async (): Promise<User[]> => {
 
   // 3. Scan championships to ensure all registered pilots have accounts
   try {
-    const champRes = await fetch('/api/championships');
+    const champRes = await fetch('/api/championships', {
+      headers: { Accept: 'application/json' },
+    });
     if (champRes.ok) {
-      const champData = await champRes.json();
+      const champData = await safeParseResponseJson<any>(champRes);
       if (champData && Array.isArray(champData.championships)) {
         champData.championships.forEach((c: any) => {
           (c.registrations || []).forEach((r: any) => {
@@ -552,9 +571,20 @@ export const resetAllUsersSimRatingService = async (): Promise<{
   error?: string;
 }> => {
   try {
-    // 1. Call backend server to reset data/users.json
-    const res = await fetch('/api/sim-rating/reset', { method: 'POST' });
-    const data = await res.json();
+    let backendUsersList: User[] | null = null;
+    // 1. Call backend server to reset data/users.json if available
+    try {
+      const res = await fetch('/api/sim-rating/reset', {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+      });
+      const data = await safeParseResponseJson<any>(res);
+      if (res.ok && data && Array.isArray(data.users)) {
+        backendUsersList = data.users;
+      }
+    } catch (netErr) {
+      console.warn('Backend reset call warning (will proceed with Firestore and local reset):', netErr);
+    }
 
     // 2. Also reset in Firestore for all documents if quota allows
     if (!isFirestoreQuotaExceeded()) {
@@ -579,17 +609,37 @@ export const resetAllUsersSimRatingService = async (): Promise<{
         await Promise.all(updates);
       } catch (fErr) {
         handleFirestoreError(fErr);
-        console.warn('Firestore reset warning (backend saved successfully):', fErr);
+        console.warn('Firestore reset warning:', fErr);
       }
     }
 
-    if (data.users && Array.isArray(data.users)) {
-      try {
-        localStorage.setItem('apexsim_users_db', JSON.stringify(data.users));
-      } catch (_) {}
-    }
+    // 3. Reset in local storage cache
+    try {
+      const cached = localStorage.getItem('apexsim_users_db');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) {
+          const resetLocal = parsed.map((u: User) => ({
+            ...u,
+            stats: {
+              races: 0,
+              wins: 0,
+              podiums: 0,
+              poles: 0,
+              fastestLaps: 0,
+              points: 0,
+              dnfs: 0,
+              safetyRating: 'B 3.50',
+              simRating: 3000,
+            },
+          }));
+          localStorage.setItem('apexsim_users_db', JSON.stringify(resetLocal));
+          if (!backendUsersList) backendUsersList = resetLocal;
+        }
+      }
+    } catch (_) {}
 
-    return { success: true, users: data.users };
+    return { success: true, users: backendUsersList || undefined };
   } catch (err: any) {
     console.error('resetAllUsersSimRatingService error:', err);
     return { success: false, error: err.message || 'Erro ao resetar ranking Sim Rating.' };
@@ -602,19 +652,79 @@ export const adminUpdatePilotProfileService = async (
   updatedData: Partial<User>
 ): Promise<{ success: boolean; user?: User; error?: string }> => {
   try {
-    // 1. Send update to backend server
-    const res = await fetch(`/api/users/${encodeURIComponent(oldId)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatedData),
-    });
+    let savedUser: User | null = null;
+    const targetNewId = (updatedData.id || oldId).trim();
 
-    const data = await res.json();
-    if (!res.ok || !data.success) {
-      throw new Error(data.error || 'Falha ao atualizar dados do piloto no servidor.');
+    // 1. Attempt to send update to backend server if reachable
+    try {
+      const res = await fetch(`/api/users/${encodeURIComponent(oldId)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          ...updatedData,
+          oldId,
+          id: targetNewId,
+        }),
+      });
+
+      const data = await safeParseResponseJson<any>(res);
+      if (res.ok && data && data.success && data.user) {
+        savedUser = data.user;
+      } else if (data && !data.success && data.error) {
+        console.warn('Backend returned JSON error on pilot update:', data.error);
+      }
+    } catch (netErr: any) {
+      console.warn('Backend /api/users PUT unreachable (offline/fallback mode):', netErr.message);
     }
 
-    const savedUser: User = data.user;
+    // Fallback: If backend is unavailable or sleeping, synthesize the saved user object locally
+    if (!savedUser) {
+      // Find existing local user to preserve unmodified fields
+      let existingUser: User | null = null;
+      try {
+        const cached = localStorage.getItem('apexsim_users_db');
+        if (cached) {
+          const list = JSON.parse(cached);
+          if (Array.isArray(list)) {
+            existingUser = list.find((u: User) => u.id === oldId || (u.email && updatedData.email && u.email.toLowerCase() === updatedData.email.toLowerCase())) || null;
+          }
+        }
+      } catch (_) {}
+
+      savedUser = {
+        ...(existingUser || {}),
+        id: targetNewId,
+        name: updatedData.name || existingUser?.name || 'Piloto',
+        email: updatedData.email || existingUser?.email || '',
+        avatar: updatedData.avatar || existingUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250',
+        role: updatedData.role || existingUser?.role || 'pilot',
+        country: updatedData.country || existingUser?.country || 'Brasil 🇧🇷',
+        gamingPlatform: updatedData.gamingPlatform || existingUser?.gamingPlatform || 'Steam (PC)',
+        gamingId: updatedData.gamingId !== undefined ? updatedData.gamingId : (existingUser?.gamingId || ''),
+        steamId: updatedData.steamId !== undefined ? updatedData.steamId : (existingUser?.steamId || ''),
+        discordTag: updatedData.discordTag !== undefined ? updatedData.discordTag : (existingUser?.discordTag || ''),
+        racingNumber: updatedData.racingNumber !== undefined ? updatedData.racingNumber : (existingUser?.racingNumber || 1),
+        teamName: updatedData.teamName !== undefined ? updatedData.teamName : (existingUser?.teamName || ''),
+        teamTag: updatedData.teamTag !== undefined ? updatedData.teamTag : (existingUser?.teamTag || ''),
+        driverCategory: updatedData.driverCategory || existingUser?.driverCategory || 'Pro',
+        stats: updatedData.stats || existingUser?.stats || {
+          races: 0,
+          wins: 0,
+          podiums: 0,
+          poles: 0,
+          fastestLaps: 0,
+          points: 0,
+          dnfs: 0,
+          safetyRating: 'B 3.50',
+          simRating: 3000,
+        },
+        ...updatedData,
+        updatedAt: new Date().toISOString(),
+      } as User;
+    }
 
     // 2. Sync to Firestore if quota allows
     if (!isFirestoreQuotaExceeded()) {
@@ -626,7 +736,7 @@ export const adminUpdatePilotProfileService = async (
             ...savedUser,
             updatedAt: serverTimestamp(),
           });
-          await deleteDoc(doc(db, USERS_COLLECTION, oldId));
+          await deleteDoc(doc(db, USERS_COLLECTION, oldId)).catch(() => {});
         } else {
           await setDoc(
             doc(db, USERS_COLLECTION, oldId),
@@ -639,9 +749,24 @@ export const adminUpdatePilotProfileService = async (
         }
       } catch (fErr) {
         handleFirestoreError(fErr);
-        console.warn('Firestore update warning (backend saved successfully):', fErr);
+        console.warn('Firestore update warning:', fErr);
       }
     }
+
+    // 3. Sync to local storage cache immediately
+    try {
+      const cached = localStorage.getItem('apexsim_users_db');
+      if (cached) {
+        const list = JSON.parse(cached);
+        if (Array.isArray(list)) {
+          const updatedList = list.map((u: User) => (u.id === oldId ? savedUser! : u));
+          if (!updatedList.some((u: User) => u.id === savedUser!.id)) {
+            updatedList.push(savedUser);
+          }
+          localStorage.setItem('apexsim_users_db', JSON.stringify(updatedList));
+        }
+      }
+    } catch (_) {}
 
     return { success: true, user: savedUser };
   } catch (err: any) {

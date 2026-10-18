@@ -13,6 +13,7 @@ import {
   HardDrive,
   FileText,
 } from 'lucide-react';
+import { safeParseResponseJson } from '../services/userService';
 
 interface RelationalDbModalProps {
   onClose: () => void;
@@ -35,10 +36,12 @@ export const RelationalDbModal: React.FC<RelationalDbModalProps> = ({
   // Fetch DB statistics
   const fetchStats = async () => {
     try {
-      const res = await fetch('/api/relational/status');
+      const res = await fetch('/api/relational/status', {
+        headers: { Accept: 'application/json' },
+      });
       if (res.ok) {
-        const data = await res.json();
-        setStats(data);
+        const data = await safeParseResponseJson<any>(res);
+        if (data) setStats(data);
       }
     } catch (e) {
       console.error('Error fetching relational status:', e);
@@ -49,10 +52,12 @@ export const RelationalDbModal: React.FC<RelationalDbModalProps> = ({
   const fetchTableRows = async (tableName: string) => {
     setTableLoading(true);
     try {
-      const res = await fetch(`/api/relational/tables/${tableName}`);
+      const res = await fetch(`/api/relational/tables/${tableName}`, {
+        headers: { Accept: 'application/json' },
+      });
       if (res.ok) {
-        const data = await res.json();
-        setTableData(data.rows || []);
+        const data = await safeParseResponseJson<any>(res);
+        setTableData(data?.rows || []);
       }
     } catch (e) {
       console.error('Error fetching table rows:', e);
@@ -65,10 +70,12 @@ export const RelationalDbModal: React.FC<RelationalDbModalProps> = ({
   // Fetch SQL Standings
   const fetchSqlStandings = async (champId: string) => {
     try {
-      const res = await fetch(`/api/relational/standings/${champId}`);
+      const res = await fetch(`/api/relational/standings/${champId}`, {
+        headers: { Accept: 'application/json' },
+      });
       if (res.ok) {
-        const data = await res.json();
-        setSqlStandings(data);
+        const data = await safeParseResponseJson<any>(res);
+        if (data) setSqlStandings(data);
       }
     } catch (e) {
       console.error('Error fetching SQL standings:', e);
@@ -90,15 +97,20 @@ export const RelationalDbModal: React.FC<RelationalDbModalProps> = ({
   const handleRunETL = async () => {
     setIsMigrating(true);
     try {
-      const res = await fetch('/api/relational/migrate', { method: 'POST' });
+      const res = await fetch('/api/relational/migrate', {
+        method: 'POST',
+        headers: { Accept: 'application/json' },
+      });
       if (res.ok) {
-        const data = await res.json();
-        setFeedback(
-          `Migração concluída com sucesso! ${data.usersCount} pilotos, ${data.championshipsCount} campeonatos e ${data.resultsCount} resultados sincronizados.`
-        );
-        await fetchStats();
-        await fetchTableRows(selectedTable);
-        setTimeout(() => setFeedback(null), 5000);
+        const data = await safeParseResponseJson<any>(res);
+        if (data) {
+          setFeedback(
+            `Migração concluída com sucesso! ${data.usersCount} pilotos, ${data.championshipsCount} campeonatos e ${data.resultsCount} resultados sincronizados.`
+          );
+          await fetchStats();
+          await fetchTableRows(selectedTable);
+          setTimeout(() => setFeedback(null), 5000);
+        }
       }
     } catch (e: any) {
       setFeedback('Erro ao executar migração: ' + e.message);

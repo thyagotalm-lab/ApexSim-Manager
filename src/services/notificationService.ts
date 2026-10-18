@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db, isFirestoreQuotaExceeded, handleFirestoreError } from '../lib/firebase';
 import { AppNotification } from '../types';
+import { safeParseResponseJson } from './userService';
 
 const NOTIFICATIONS_COLLECTION = 'notifications';
 const LOCAL_STORAGE_KEY = 'apexsim_notifications';
@@ -74,9 +75,11 @@ export const saveLocalNotifications = (list: AppNotification[]) => {
 // Fetch backend notifications from /api/notifications
 export const fetchBackendNotifications = async (): Promise<AppNotification[]> => {
   try {
-    const res = await fetch('/api/notifications');
+    const res = await fetch('/api/notifications', {
+      headers: { Accept: 'application/json' },
+    });
     if (res.ok) {
-      const data = await res.json();
+      const data = await safeParseResponseJson<any>(res);
       if (data && Array.isArray(data.notifications)) {
         return data.notifications;
       }

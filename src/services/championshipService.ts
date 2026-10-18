@@ -10,7 +10,7 @@ import {
 } from 'firebase/firestore';
 import { db, isFirestoreQuotaExceeded, handleFirestoreError } from '../lib/firebase';
 import { Championship } from '../types';
-import { isDeletedUserAccount } from './userService';
+import { isDeletedUserAccount, safeParseResponseJson } from './userService';
 import { sortStagesChronologically } from '../utils/stageUtils';
 
 const CHAMPS_COLLECTION = 'championships';
@@ -103,17 +103,21 @@ export const isRealChampionship = (c: any): boolean => {
 // Fetch championships from backend server API
 export const fetchBackendChampionships = async (): Promise<{ championships: Championship[]; deletedIds: string[] }> => {
   try {
-    const res = await fetch('/api/championships');
+    const res = await fetch('/api/championships', {
+      headers: { Accept: 'application/json' },
+    });
     if (res.ok) {
-      const data = await res.json();
-      const serverDeletedIds: string[] = Array.isArray(data.deletedIds) ? data.deletedIds : [];
-      serverDeletedIds.forEach((did) => addDeletedChampionshipId(did));
+      const data = await safeParseResponseJson<any>(res);
+      if (data) {
+        const serverDeletedIds: string[] = Array.isArray(data.deletedIds) ? data.deletedIds : [];
+        serverDeletedIds.forEach((did) => addDeletedChampionshipId(did));
 
-      if (data && Array.isArray(data.championships)) {
-        return {
-          championships: data.championships.filter(isRealChampionship).map(sanitizeChampionshipRegistrations),
-          deletedIds: serverDeletedIds,
-        };
+        if (Array.isArray(data.championships)) {
+          return {
+            championships: data.championships.filter(isRealChampionship).map(sanitizeChampionshipRegistrations),
+            deletedIds: serverDeletedIds,
+          };
+        }
       }
     }
   } catch (err) {
