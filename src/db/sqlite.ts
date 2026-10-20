@@ -414,6 +414,16 @@ export function runRelationalETLMigration(): {
       usersCount++;
     }
 
+    // Purge removed users from SQLite
+    const validUserIds = rawUsers.map((u) => String(u.id));
+    if (validUserIds.length > 0) {
+      const placeholders = validUserIds.map(() => '?').join(',');
+      db.prepare(`DELETE FROM users WHERE id NOT IN (${placeholders})`).run(...validUserIds);
+    }
+
+    // Clear registrations to ensure fresh state from sanitized championships
+    db.prepare('DELETE FROM registrations').run();
+
     // 2. Migrate Championships & Nested Relational Elements
     const upsertChamp = db.prepare(`
       INSERT INTO championships (
@@ -611,6 +621,27 @@ export function runRelationalETLMigration(): {
       );
     }
 
+    // Clean out deleted users from SQLite
+    const deletedFile = path.join(DATA_DIR, 'deleted_users.json');
+    if (fs.existsSync(deletedFile)) {
+      try {
+        const deletedIds = JSON.parse(fs.readFileSync(deletedFile, 'utf-8'));
+        if (Array.isArray(deletedIds)) {
+          const delUserStmt = db.prepare(`DELETE FROM users WHERE LOWER(id) = ? OR LOWER(email) = ? OR LOWER(name) = ?`);
+          const delRegStmt = db.prepare(`DELETE FROM registrations WHERE LOWER(user_id) = ? OR LOWER(driver_name) = ?`);
+          const delResStmt = db.prepare(`DELETE FROM race_results WHERE LOWER(driver_id) = ? OR LOWER(driver_name) = ?`);
+          for (const d of deletedIds) {
+            const clean = String(d).toLowerCase().trim();
+            delUserStmt.run(clean, clean, clean);
+            delRegStmt.run(clean, clean);
+            delResStmt.run(clean, clean);
+          }
+        }
+      } catch (e) {
+        console.warn('Error purging deleted users in SQLite ETL:', e);
+      }
+    }
+
     db.exec('COMMIT;');
     console.log(
       `[Relational DB] ETL Migration successful: ${usersCount} users, ${championshipsCount} championships, ${stagesCount} stages, ${resultsCount} race results, ${registrationsCount} registrations.`
@@ -714,6 +745,9 @@ export function queryDriverStandingsSQL(championshipId: string) {
     FROM stages s
     JOIN race_results r ON s.id = r.stage_id
     WHERE s.championship_id = ?
+      AND LOWER(r.driver_name) NOT IN ('huryel felipe', 'piloto de testes', 'tyko moura')
+      AND LOWER(r.driver_name) NOT LIKE '%huryel%'
+      AND LOWER(r.driver_id) NOT IN ('user_1791773958462_898s', 'user_1791048231452_xa2l', 'user_1791049287095_z3as', 'user_1791244365686_k1vw')
     GROUP BY r.driver_id, r.driver_name, r.team_name, r.car_number
     ORDER BY totalPoints DESC, wins DESC, podiums DESC, bestFinish ASC;
   `);
@@ -736,7 +770,12 @@ export function queryConstructorStandingsSQL(championshipId: string) {
       COUNT(CASE WHEN r.finish_position BETWEEN 1 AND 3 THEN 1 END) as podiums
     FROM stages s
     JOIN race_results r ON s.id = r.stage_id
-    WHERE s.championship_id = ? AND r.team_name IS NOT NULL AND r.team_name != ''
+    WHERE s.championship_id = ?
+      AND r.team_name IS NOT NULL
+      AND r.team_name != ''
+      AND LOWER(r.driver_name) NOT IN ('huryel felipe', 'piloto de testes', 'tyko moura')
+      AND LOWER(r.driver_name) NOT LIKE '%huryel%'
+      AND LOWER(r.driver_id) NOT IN ('user_1791773958462_898s', 'user_1791048231452_xa2l', 'user_1791049287095_z3as', 'user_1791244365686_k1vw')
     GROUP BY r.team_name
     ORDER BY totalPoints DESC, wins DESC, podiums DESC;
   `);

@@ -107,6 +107,71 @@ const MOCK_CHAMPIONSHIP_IDS = new Set([
 
 const ChampionshipContext = createContext<ChampionshipContextType | undefined>(undefined);
 
+export const sanitizeChampionshipPilots = (champ: Championship): Championship => {
+  const registrations = (champ.registrations || []).filter((r) => {
+    return (
+      !isDeletedUserAccount(r) &&
+      !isDeletedUserAccount({
+        id: r.userId,
+        driverId: r.userId,
+        name: r.userName,
+        email: r.userEmail,
+        gamingId: (r as any).steamGuid,
+      })
+    );
+  });
+
+  const stages = (champ.stages || []).map((stage) => {
+    const results = (stage.results || []).filter((res) => {
+      return !isDeletedUserAccount({
+        id: res.driverId,
+        driverId: res.driverId,
+        name: res.driverName,
+        email: (res as any).driverEmail,
+      });
+    });
+
+    const sprintResults = (stage.sprintResults || []).filter((res) => {
+      return !isDeletedUserAccount({
+        id: res.driverId,
+        driverId: res.driverId,
+        name: res.driverName,
+        email: (res as any).driverEmail,
+      });
+    });
+
+    const isPoleDeleted =
+      stage.poleDriverId &&
+      isDeletedUserAccount({
+        id: stage.poleDriverId,
+        driverId: stage.poleDriverId,
+        name: (stage as any).poleDriverName,
+      });
+
+    const isFLDeleted =
+      stage.fastestLapDriverId &&
+      isDeletedUserAccount({
+        id: stage.fastestLapDriverId,
+        driverId: stage.fastestLapDriverId,
+        name: (stage as any).fastestLapDriverName,
+      });
+
+    return {
+      ...stage,
+      results,
+      sprintResults,
+      poleDriverId: isPoleDeleted ? undefined : stage.poleDriverId,
+      fastestLapDriverId: isFLDeleted ? undefined : stage.fastestLapDriverId,
+    };
+  });
+
+  return {
+    ...champ,
+    registrations,
+    stages: sortStagesChronologically(stages),
+  };
+};
+
 export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser, users, updateUser } = useAuth();
 
@@ -118,13 +183,14 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const map = new Map<string, Championship>();
         parsed.filter(isRealChampionship).forEach((c) => {
           if (!map.has(c.id)) {
-            map.set(c.id, {
-              ...c,
-              stages: sortStagesChronologically(c.stages),
-            });
+            map.set(c.id, sanitizeChampionshipPilots(c));
           }
         });
-        return Array.from(map.values());
+        const cleanList = Array.from(map.values());
+        try {
+          localStorage.setItem('apexsim_championships_db', JSON.stringify(cleanList));
+        } catch (_) {}
+        return cleanList;
       }
     } catch (e) {
       console.error(e);
@@ -151,10 +217,7 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
         const map = new Map<string, Championship>();
         cloudChamps.filter(isRealChampionship).forEach((c) => {
           if (!map.has(c.id)) {
-            map.set(c.id, {
-              ...c,
-              stages: sortStagesChronologically(c.stages),
-            });
+            map.set(c.id, sanitizeChampionshipPilots(c));
           }
         });
         const filtered = Array.from(map.values());
@@ -172,7 +235,7 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   useEffect(() => {
     try {
-      const manualOnly = championships.filter(isRealChampionship);
+      const manualOnly = championships.filter(isRealChampionship).map(sanitizeChampionshipPilots);
       localStorage.setItem('apexsim_championships_db', JSON.stringify(manualOnly));
       if (activeChampionshipId) {
         localStorage.setItem('apexsim_active_champ_id', activeChampionshipId);
@@ -184,7 +247,7 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   // All championships created by any user are publicly visible to all existing, new, and prospective users
   const visibleChampionships = useMemo(() => {
-    return championships;
+    return championships.map(sanitizeChampionshipPilots);
   }, [championships]);
 
   const activeChampionship = useMemo(() => {
@@ -194,10 +257,7 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
       championships[0] ||
       null;
     if (!found) return null;
-    return {
-      ...found,
-      stages: sortStagesChronologically(found.stages),
-    };
+    return sanitizeChampionshipPilots(found);
   }, [championships, activeChampionshipId]);
 
   const getLeagueAdmins = (championshipId: string): User[] => {

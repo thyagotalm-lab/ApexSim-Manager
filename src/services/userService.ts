@@ -22,10 +22,14 @@ const getPersistedDeletedUsers = (): Set<string> => {
     'user_1791048231452_xa2l',
     'user_1791049287095_z3as',
     'user_1791244365686_k1vw',
+    'user_1791773958462_898s',
     'mouraengambiental@gmail.com',
     'testes123@gmail.com',
+    'huryelfelipe08@icloud.com',
     'tyko moura',
     'piloto de testes',
+    'huryel felipe',
+    'hu1ryelz_rdx_',
   ];
   try {
     const saved = localStorage.getItem('apexsim_deleted_users_db');
@@ -53,13 +57,28 @@ export const addDeletedUserTombstone = (identifier: string) => {
 
 export const isDeletedUserAccount = (u: any): boolean => {
   if (!u) return false;
-  const id = (u.id || u.userId || '').toString().toLowerCase().trim();
-  const email = (u.email || u.userEmail || '').toString().toLowerCase().trim();
+  const id = (u.id || u.userId || u.driverId || '').toString().toLowerCase().trim();
+  const email = (u.email || u.userEmail || u.driverEmail || '').toString().toLowerCase().trim();
   const name = (u.name || u.userName || u.driverName || '').toString().toLowerCase().trim();
+  const gamingId = (u.gamingId || u.steamId || u.steamGuid || '').toString().toLowerCase().trim();
+
+  if (
+    name === 'huryel felipe' ||
+    name.includes('huryel') ||
+    name === 'tyko moura' ||
+    name === 'piloto de testes' ||
+    id === 'user_1791773958462_898s' ||
+    email === 'huryelfelipe08@icloud.com' ||
+    gamingId === 'hu1ryelz_rdx_'
+  ) {
+    return true;
+  }
+
   return Boolean(
     (id && DELETED_USERS_SET.has(id)) ||
     (email && DELETED_USERS_SET.has(email)) ||
-    (name && DELETED_USERS_SET.has(name))
+    (name && DELETED_USERS_SET.has(name)) ||
+    (gamingId && DELETED_USERS_SET.has(gamingId))
   );
 };
 

@@ -97,7 +97,7 @@ export function calculateDriverStandings(
     userEmail?: string
   ) => {
     if (
-      isDeletedUserAccount({ id: driverId, name: fallbackName, email: userEmail })
+      isDeletedUserAccount({ id: driverId, driverId, name: fallbackName, email: userEmail })
     ) {
       return null;
     }
@@ -311,6 +311,18 @@ export function calculateConstructorStandings(
           return;
         }
 
+        // Skip permanently deleted drivers from scoring or contributing to constructors
+        if (
+          isDeletedUserAccount({
+            id: result.driverId,
+            driverId: result.driverId,
+            name: reg?.userName || result.driverName,
+            email: reg?.userEmail,
+          })
+        ) {
+          return;
+        }
+
         let team = teamMap.get(result.teamName);
         if (!team) {
           team = {
@@ -360,6 +372,18 @@ export function calculateConstructorStandings(
 
         // If driver is a reserve, strictly skip counting sprint points for constructor standings
         if (isReserveDriver) {
+          return;
+        }
+
+        // Skip permanently deleted drivers from scoring sprint points for constructors
+        if (
+          isDeletedUserAccount({
+            id: sprintResult.driverId,
+            driverId: sprintResult.driverId,
+            name: reg?.userName || sprintResult.driverName,
+            email: reg?.userEmail,
+          })
+        ) {
           return;
         }
 

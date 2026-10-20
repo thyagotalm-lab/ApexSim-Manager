@@ -70,25 +70,59 @@ export const sanitizeChampionshipRegistrations = (c: Championship): Championship
   if (!c) return c;
   let updated = c;
 
-  // Always organize the stages in strict chronological order by date and time
-  if (Array.isArray(c.stages) && c.stages.length > 0) {
-    const sorted = sortStagesChronologically(c.stages);
+  // Filter registrations against permanently deleted users
+  if (Array.isArray(c.registrations)) {
+    const filteredRegs = c.registrations.filter((r) => {
+      return !isDeletedUserAccount(r) && !isDeletedUserAccount({ id: r.userId, email: r.userEmail, name: r.userName });
+    });
+    if (filteredRegs.length !== c.registrations.length) {
+      updated = {
+        ...updated,
+        registrations: filteredRegs,
+      };
+    }
+  }
+
+  // Filter stage race results against deleted users and organize stages chronologically
+  if (Array.isArray(updated.stages)) {
+    const sanitizedStages = updated.stages.map((st) => {
+      let stageModified = false;
+      let newResults = st.results;
+      if (Array.isArray(st.results)) {
+        const filteredRes = st.results.filter(
+          (res: any) => !isDeletedUserAccount({ id: res.driverId, name: res.driverName, email: res.driverEmail })
+        );
+        if (filteredRes.length !== st.results.length) {
+          newResults = filteredRes;
+          stageModified = true;
+        }
+      }
+      let newSprintResults = st.sprintResults;
+      if (Array.isArray(st.sprintResults)) {
+        const filteredSprint = st.sprintResults.filter(
+          (res: any) => !isDeletedUserAccount({ id: res.driverId, name: res.driverName, email: res.driverEmail })
+        );
+        if (filteredSprint.length !== st.sprintResults.length) {
+          newSprintResults = filteredSprint;
+          stageModified = true;
+        }
+      }
+      if (stageModified) {
+        return {
+          ...st,
+          results: newResults,
+          sprintResults: newSprintResults,
+        };
+      }
+      return st;
+    });
+
     updated = {
       ...updated,
-      stages: sorted,
+      stages: sortStagesChronologically(sanitizedStages),
     };
   }
 
-  if (!Array.isArray(c.registrations)) return updated;
-  const filteredRegs = c.registrations.filter((r) => {
-    return !isDeletedUserAccount(r) && !isDeletedUserAccount({ id: r.userId, email: r.userEmail, name: r.userName });
-  });
-  if (filteredRegs.length !== c.registrations.length) {
-    return {
-      ...updated,
-      registrations: filteredRegs,
-    };
-  }
   return updated;
 };
 

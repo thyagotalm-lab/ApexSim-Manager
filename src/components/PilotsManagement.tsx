@@ -26,7 +26,7 @@ import { RegistrationPilot, User } from '../types';
 import { getTeamsBySimulator, getTeamCode, OfficialTeam } from '../data/f1Teams';
 import { getSimRatingTier } from '../utils/simRating';
 import { downloadPdf } from '../utils/pdfHelper';
-import { isFakeMockUser } from '../services/userService';
+import { isFakeMockUser, isDeletedUserAccount } from '../services/userService';
 
 interface PilotsManagementProps {
   onOpenCardModal?: (driver?: User) => void;
@@ -152,12 +152,13 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
 
   const isAdmin = isUserLeagueAdmin(activeChampionship.id, currentUser?.id);
   const userRegistration = activeChampionship.registrations.find((r) => r.userId === currentUser?.id);
-  const approvedPilots = activeChampionship.registrations.filter((r) => r.status === 'APROVADO' && !r.isReserve);
-  const pendingPilots = activeChampionship.registrations.filter((r) => r.status === 'PENDENTE');
-  const reservePilots = activeChampionship.registrations.filter((r) => r.status === 'RESERVA' || r.isReserve);
-  const allGridPilots = activeChampionship.registrations.filter((r) => r.status === 'APROVADO' || r.status === 'RESERVA');
+  const approvedPilots = activeChampionship.registrations.filter((r) => r.status === 'APROVADO' && !r.isReserve && !isDeletedUserAccount(r));
+  const pendingPilots = activeChampionship.registrations.filter((r) => r.status === 'PENDENTE' && !isDeletedUserAccount(r));
+  const reservePilots = activeChampionship.registrations.filter((r) => (r.status === 'RESERVA' || r.isReserve) && !isDeletedUserAccount(r));
+  const allGridPilots = activeChampionship.registrations.filter((r) => (r.status === 'APROVADO' || r.status === 'RESERVA') && !isDeletedUserAccount(r));
 
   const displayedGridPilots = activeChampionship.registrations.filter((r) => {
+    if (isDeletedUserAccount(r)) return false;
     if (r.status === 'PENDENTE' || r.status === 'REJEITADO') return false;
     if (gridFilter === 'TITULAR') return r.status === 'APROVADO' && !r.isReserve;
     if (gridFilter === 'RESERVA') return r.status === 'RESERVA' || r.isReserve;
@@ -171,14 +172,15 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
   const allKnownUsers = useMemo(() => {
     const map = new Map<string, User>();
     users.forEach((u) => {
-      if (!isFakeMockUser(u)) {
+      if (!isFakeMockUser(u) && !isDeletedUserAccount(u)) {
         map.set(u.id, u);
         if (u.email) map.set(u.email.toLowerCase().trim(), u);
       }
     });
 
     championships.forEach((c) => {
-      c.registrations.forEach((reg) => {
+      (c.registrations || []).forEach((reg) => {
+        if (isDeletedUserAccount(reg) || isDeletedUserAccount({ id: reg.userId, email: reg.userEmail, name: reg.userName })) return;
         const emailKey = (reg.userEmail || '').toLowerCase().trim();
         const existing = (reg.userId && map.get(reg.userId)) || (emailKey && map.get(emailKey));
         if (!existing) {
@@ -221,7 +223,9 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
 
   // Catalog with full 5-championship tracking for each pilot
   const pilotCatalog = useMemo(() => {
-    return allKnownUsers.map((u) => {
+    return allKnownUsers
+      .filter((u) => !isDeletedUserAccount(u))
+      .map((u) => {
       const cleanEmail = (u.email || '').toLowerCase().trim();
       const cleanId = (u.id || '').toLowerCase().trim();
 

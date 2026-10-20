@@ -682,40 +682,6 @@
     "updatedAt": "2026-10-12T06:07:14.114Z"
   },
   {
-    "id": "user_1791773958462_898s",
-    "name": "Huryel Felipe",
-    "email": "huryelfelipe08@icloud.com",
-    "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250",
-    "role": "pilot",
-    "gamingPlatform": "PlayStation Network (PSN)",
-    "gamingId": "Hu1ryelz_RDX_",
-    "steamId": "Hu1ryelz_RDX_",
-    "discordTag": "",
-    "country": "Brasil 🇧🇷",
-    "racingNumber": 13,
-    "driverCategory": "Pro",
-    "teamName": "RDX Racing",
-    "teamTag": "RDX",
-    "administeredLeagueIds": [],
-    "stats": {
-      "races": 0,
-      "wins": 0,
-      "podiums": 0,
-      "poles": 0,
-      "fastestLaps": 0,
-      "points": 0,
-      "dnfs": 0,
-      "safetyRating": "B 3.50",
-      "simRating": 3000,
-      "qualifications": 0
-    },
-    "updatedAt": {
-      "type": "firestore/timestamp/1.0",
-      "seconds": 1791856687,
-      "nanoseconds": 70000000
-    }
-  },
-  {
     "id": "user_1792326301196_fp06",
     "name": "Fabio  Garcia",
     "email": "fabioroolgarcia@gmail.com",
@@ -743,5 +709,39 @@
       "simRating": 3000
     },
     "updatedAt": "2026-10-18T17:23:40.809Z"
+  },
+  {
+    "driverCategory": "Pro",
+    "name": "Nicolas Gabriel",
+    "gamingId": "Gx7wxzwin",
+    "role": "pilot",
+    "updatedAt": {
+      "type": "firestore/timestamp/1.0",
+      "seconds": 1792424733,
+      "nanoseconds": 87000000
+    },
+    "stats": {
+      "simRating": 3000,
+      "poles": 0,
+      "fastestLaps": 0,
+      "dnfs": 0,
+      "points": 0,
+      "podiums": 0,
+      "wins": 0,
+      "races": 0,
+      "safetyRating": "B 3.50"
+    },
+    "password": "186v49v44v63",
+    "id": "user_1792424732006_4i99",
+    "country": "Brasil 🇧🇷",
+    "administeredLeagueIds": [],
+    "discordTag": "",
+    "teamTag": "",
+    "email": "wassunicolas@gmail.com",
+    "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=250",
+    "teamName": "",
+    "racingNumber": 28,
+    "steamId": "Gx7wxzwin",
+    "gamingPlatform": "PlayStation Network (PSN)"
   }
 ]

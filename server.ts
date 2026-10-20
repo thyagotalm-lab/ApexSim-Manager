@@ -184,18 +184,64 @@ const sortStagesChronologically = (stages: any[]): any[] => {
   return copy.map((st, i) => ({ ...st, roundNumber: i + 1 }));
 };
 
+const isDeletedPilotBackend = (p: any, deletedSet: Set<string>): boolean => {
+  if (!p) return false;
+  const id = (p.id || p.userId || p.driverId || '').toString().toLowerCase().trim();
+  const email = (p.email || p.userEmail || p.driverEmail || '').toString().toLowerCase().trim();
+  const name = (p.name || p.userName || p.driverName || '').toString().toLowerCase().trim();
+  const gamingId = (p.gamingId || p.steamId || p.steamGuid || '').toString().toLowerCase().trim();
+
+  if (
+    name === 'huryel felipe' ||
+    name.includes('huryel') ||
+    name === 'tyko moura' ||
+    name === 'piloto de testes' ||
+    id === 'user_1791773958462_898s' ||
+    email === 'huryelfelipe08@icloud.com' ||
+    gamingId === 'hu1ryelz_rdx_'
+  ) {
+    return true;
+  }
+
+  return (
+    (id && deletedSet.has(id)) ||
+    (email && deletedSet.has(email)) ||
+    (name && deletedSet.has(name)) ||
+    (gamingId && deletedSet.has(gamingId))
+  );
+};
+
+const sanitizeChampionshipBackend = (c: any, deletedSet: Set<string>): any => {
+  if (!c) return c;
+  const registrations = (c.registrations || []).filter((r: any) => !isDeletedPilotBackend(r, deletedSet));
+  const stages = (c.stages || []).map((stage: any) => {
+    const results = (stage.results || []).filter((r: any) => !isDeletedPilotBackend(r, deletedSet));
+    const sprintResults = (stage.sprintResults || []).filter((r: any) => !isDeletedPilotBackend(r, deletedSet));
+    const isPoleDeleted = stage.poleDriverId && isDeletedPilotBackend({ id: stage.poleDriverId, driverId: stage.poleDriverId }, deletedSet);
+    const isFLDeleted = stage.fastestLapDriverId && isDeletedPilotBackend({ id: stage.fastestLapDriverId, driverId: stage.fastestLapDriverId }, deletedSet);
+    return {
+      ...stage,
+      results,
+      sprintResults,
+      poleDriverId: isPoleDeleted ? undefined : stage.poleDriverId,
+      fastestLapDriverId: isFLDeleted ? undefined : stage.fastestLapDriverId,
+    };
+  });
+  return {
+    ...c,
+    registrations,
+    stages: sortStagesChronologically(stages),
+  };
+};
+
 const readChampionshipsFromFile = (): any[] => {
   try {
     if (fs.existsSync(CHAMPIONSHIPS_FILE)) {
       const data = fs.readFileSync(CHAMPIONSHIPS_FILE, 'utf-8');
       const parsed = JSON.parse(data);
       if (Array.isArray(parsed)) {
-        return parsed.map((c: any) => {
-          if (Array.isArray(c.stages)) {
-            c.stages = sortStagesChronologically(c.stages);
-          }
-          return c;
-        });
+        const deletedSet = readDeletedUserIdsAndEmails();
+        return parsed.map((c: any) => sanitizeChampionshipBackend(c, deletedSet));
       }
     }
   } catch (err) {
@@ -220,7 +266,9 @@ const scheduleRelationalETL = () => {
 
 const writeChampionshipsToFile = (champs: any[]) => {
   try {
-    fs.writeFileSync(CHAMPIONSHIPS_FILE, JSON.stringify(champs, null, 2), 'utf-8');
+    const deletedSet = readDeletedUserIdsAndEmails();
+    const sanitized = (champs || []).map((c: any) => sanitizeChampionshipBackend(c, deletedSet));
+    fs.writeFileSync(CHAMPIONSHIPS_FILE, JSON.stringify(sanitized, null, 2), 'utf-8');
     scheduleRelationalETL();
   } catch (err) {
     console.error('Error writing championships file:', err);
@@ -270,7 +318,8 @@ const filterRealUsersOnly = (usersList: any[]) => {
       deletedIdentifiers.has(email) ||
       (name && deletedIdentifiers.has(name)) ||
       name === 'tyko moura' ||
-      name === 'piloto de testes'
+      name === 'piloto de testes' ||
+      name === 'huryel felipe'
     ) {
       return false;
     }
