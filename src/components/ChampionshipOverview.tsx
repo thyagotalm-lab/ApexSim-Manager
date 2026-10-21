@@ -20,6 +20,7 @@ import {
   Lock,
   Calculator,
   Flame,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
@@ -28,9 +29,11 @@ import { calculateTitleMathematics } from '../utils/titleDecider';
 import { CountryFlag } from './CountryFlag';
 import { PdfRulesDownloadCard } from './PdfRulesDownloadCard';
 import { TitleSimulatorModal } from './TitleSimulatorModal';
+import { ExportStageResultsModal } from './ExportStageResultsModal';
 import { getTeamCode, getTeamsBySimulator } from '../data/f1Teams';
 import { NavTab } from './FooterNavigation';
 import { PWAInstallButton } from './PWAInstallButton';
+import { StageRound } from '../types';
 
 interface ChampionshipOverviewProps {
   onNavigateToTab: (tab: NavTab) => void;
@@ -44,6 +47,8 @@ export const ChampionshipOverview: React.FC<ChampionshipOverviewProps> = ({
 }) => {
   const { currentUser, users, openAuthModal } = useAuth();
   const { activeChampionship, isUserLeagueAdmin } = useChampionships();
+  const [isTitleSimulatorOpen, setIsTitleSimulatorOpen] = useState(false);
+  const [exportStage, setExportStage] = useState<StageRound | null>(null);
 
   if (!currentUser) {
     return (
@@ -120,7 +125,6 @@ export const ChampionshipOverview: React.FC<ChampionshipOverviewProps> = ({
   const isAdmin = currentUser ? isUserLeagueAdmin(activeChampionship.id, currentUser.id) : false;
 
   const occupancyRate = Math.round((approvedRegistrations.length / activeChampionship.maxGrid) * 100);
-  const [isTitleSimulatorOpen, setIsTitleSimulatorOpen] = useState(false);
   const titleMath = calculateTitleMathematics(activeChampionship, users);
 
   return (
@@ -645,12 +649,23 @@ export const ChampionshipOverview: React.FC<ChampionshipOverviewProps> = ({
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                 <span>Última corrida realizada: <strong>{lastCompletedStage.trackName}</strong> (Etapa {lastCompletedStage.roundNumber})</span>
               </span>
-              <button
-                onClick={() => onNavigateToTab('calendar')}
-                className="text-red-400 hover:text-red-300 font-semibold cursor-pointer"
-              >
-                Ver Classificação da Prova →
-              </button>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setExportStage(lastCompletedStage)}
+                  className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 font-semibold cursor-pointer transition-colors"
+                  title="Gerar imagem oficial dos resultados em alta resolução (Grid, Pole e Volta Mais Rápida)"
+                >
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  <span>Gerar Imagem dos Resultados</span>
+                </button>
+                <button
+                  onClick={() => onNavigateToTab('calendar')}
+                  className="text-red-400 hover:text-red-300 font-semibold cursor-pointer"
+                >
+                  Ver Classificação da Prova →
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -807,6 +822,17 @@ export const ChampionshipOverview: React.FC<ChampionshipOverviewProps> = ({
         isOpen={isTitleSimulatorOpen}
         onClose={() => setIsTitleSimulatorOpen(false)}
       />
+
+      {/* Export Stage Results Image Modal */}
+      {exportStage && activeChampionship && (
+        <ExportStageResultsModal
+          isOpen={Boolean(exportStage)}
+          onClose={() => setExportStage(null)}
+          stage={exportStage}
+          championship={activeChampionship}
+          initialRaceType="main"
+        />
+      )}
     </div>
   );
 };

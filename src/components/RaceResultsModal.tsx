@@ -17,6 +17,7 @@ import {
   ChevronRight,
   UserX,
   UserCheck,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
@@ -24,6 +25,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { CountryFlag } from './CountryFlag';
 import { RaceResultItem, StageRound } from '../types';
 import { DriverOfTheDayVoting } from './DriverOfTheDayVoting';
+import { ExportStageResultsModal } from './ExportStageResultsModal';
 
 interface RaceResultsModalProps {
   stage: StageRound | null;
@@ -61,6 +63,7 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({
 
   // Active step inside results: 'grid' (Grid de Largada) or 'finish' (Grid de Chegada)
   const [gridStep, setGridStep] = useState<'grid' | 'finish'>('grid');
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Helper to build initial results array
   const createInitialList = (type: 'main' | 'sprint'): RaceResultItem[] => {
@@ -680,7 +683,8 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({
     raceType === 'main' ? setFastestLapTime : setSprintFastestLapTime;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative w-full max-w-5xl bg-[#0c121e] border border-slate-700/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="p-4 sm:p-5 border-b border-slate-800 bg-slate-900/90 flex items-center justify-between">
@@ -758,12 +762,25 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsExportModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white text-xs font-semibold shadow-md shadow-red-950/40 transition-all cursor-pointer whitespace-nowrap"
+              title="Gerar imagem oficial HD dos resultados desta etapa (Pole, Volta Mais Rápida e Grid de Chegada)"
+            >
+              <ImageIcon className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Exportar Imagem HD</span>
+              <span className="sm:hidden">Imagem</span>
+            </button>
+
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Tab Switcher: Sprint vs Main vs DotD */}
@@ -1831,5 +1848,17 @@ export const RaceResultsModal: React.FC<RaceResultsModalProps> = ({
         </div>
       </div>
     </div>
-  );
+
+    {/* Export Stage Results Image Modal */}
+    {isExportModalOpen && (
+      <ExportStageResultsModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        stage={stage}
+        championship={activeChampionship}
+        initialRaceType={raceType}
+      />
+    )}
+  </>
+);
 };

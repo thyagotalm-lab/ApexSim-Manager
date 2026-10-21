@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Calendar, Clock, MapPin, CloudRain, Sun, Moon, Plus, Edit2, Trash2, CheckCircle2, ChevronRight, Award, AlertTriangle, X, Zap, Scale, ShieldAlert, Trophy } from 'lucide-react';
+import { Calendar, Clock, MapPin, CloudRain, Sun, Moon, Plus, Edit2, Trash2, CheckCircle2, ChevronRight, Award, AlertTriangle, X, Zap, Scale, ShieldAlert, Trophy, Image as ImageIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useChampionships } from '../context/ChampionshipContext';
 import { CountryFlag } from './CountryFlag';
 import { StageRound } from '../types';
 import { SubmitProtestModal } from './SubmitProtestModal';
 import { StewardsProtestsModal } from './StewardsProtestsModal';
+import { ExportStageResultsModal } from './ExportStageResultsModal';
 import { sortStagesChronologically, formatStageDateDisplay } from '../utils/stageUtils';
 
 interface CalendarStagesProps {
@@ -25,6 +26,7 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
   const [feedbackMessage, setFeedbackMessage] = useState<string>('');
   const [protestStage, setProtestStage] = useState<StageRound | null>(null);
   const [isStewardsModalOpen, setIsStewardsModalOpen] = useState<boolean>(false);
+  const [stageToExport, setStageToExport] = useState<{ stage: StageRound; raceType: 'main' | 'sprint' } | null>(null);
 
   if (!activeChampionship) {
     return (
@@ -319,6 +321,16 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
                             <ChevronRight className="w-3.5 h-3.5 shrink-0" />
                           </button>
 
+                          <button
+                            type="button"
+                            onClick={() => setStageToExport({ stage, raceType: 'main' })}
+                            className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-950/70 hover:bg-emerald-900/90 border border-emerald-800/80 text-emerald-300 text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm shadow-emerald-950/30"
+                            title="Gerar imagem oficial de alta resolução dos resultados (Grid de Chegada, Pole e Volta Mais Rápida)"
+                          >
+                            <ImageIcon className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span>Exportar Imagem</span>
+                          </button>
+
                           {stage.hasSprint && hasSprintResults && (
                             <button
                               type="button"
@@ -346,15 +358,27 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
 
                       {/* If race is not completed but sprint has results, viewer can view sprint results */}
                       {!isCompleted && stage.hasSprint && hasSprintResults && (
-                        <button
-                          type="button"
-                          onClick={() => onOpenResultsModal(stage, 'sprint')}
-                          className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900/80 border border-amber-800/80 text-amber-200 text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap"
-                          title="Visualizar classificação da Corrida Sprint"
-                        >
-                          <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                          <span>Ver Sprint</span>
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => onOpenResultsModal(stage, 'sprint')}
+                            className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-amber-950/60 hover:bg-amber-900/80 border border-amber-800/80 text-amber-200 text-xs font-medium transition-colors flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                            title="Visualizar classificação da Corrida Sprint"
+                          >
+                            <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>Ver Sprint</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setStageToExport({ stage, raceType: 'sprint' })}
+                            className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-950/70 hover:bg-emerald-900/90 border border-emerald-800/80 text-emerald-300 text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap shadow-sm shadow-emerald-950/30"
+                            title="Gerar imagem oficial de alta resolução dos resultados da Sprint"
+                          >
+                            <ImageIcon className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                            <span>Exportar Imagem</span>
+                          </button>
+                        </>
                       )}
 
                       {/* Admin Actions */}
@@ -509,6 +533,17 @@ export const CalendarStages: React.FC<CalendarStagesProps> = ({
         <StewardsProtestsModal
           isOpen={isStewardsModalOpen}
           onClose={() => setIsStewardsModalOpen(false)}
+        />
+      )}
+
+      {/* Export Stage Results Image Modal */}
+      {stageToExport && activeChampionship && (
+        <ExportStageResultsModal
+          isOpen={Boolean(stageToExport)}
+          onClose={() => setStageToExport(null)}
+          stage={stageToExport.stage}
+          championship={activeChampionship}
+          initialRaceType={stageToExport.raceType}
         />
       )}
     </div>

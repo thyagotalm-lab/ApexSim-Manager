@@ -27,8 +27,6 @@ export const LeagueAdminsModal: React.FC<LeagueAdminsModalProps> = ({ onClose })
     syncUsers().catch(() => {});
   }, []);
 
-  if (!activeChampionship) return null;
-
   const handleManualSync = async () => {
     setIsSyncing(true);
     try {
@@ -40,7 +38,7 @@ export const LeagueAdminsModal: React.FC<LeagueAdminsModalProps> = ({ onClose })
 
   const handleManualAddUser = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!manualName.trim() || !manualEmail.trim()) return;
+    if (!activeChampionship || !manualName.trim() || !manualEmail.trim()) return;
     const cleanEmail = manualEmail.trim();
     const newUser = registerUser({
       name: manualName.trim(),
@@ -99,7 +97,7 @@ export const LeagueAdminsModal: React.FC<LeagueAdminsModalProps> = ({ onClose })
 
   const allRegisteredUsers = useMemo(() => Array.from(allUsersMap.values()), [allUsersMap]);
 
-  const currentAdminUsers = getLeagueAdmins(activeChampionship.id);
+  const currentAdminUsers = activeChampionship ? getLeagueAdmins(activeChampionship.id) : [];
   const currentAdminIds = useMemo(() => new Set(currentAdminUsers.map((u) => u.id)), [currentAdminUsers]);
 
   // Filtered by search and tab
@@ -124,6 +122,8 @@ export const LeagueAdminsModal: React.FC<LeagueAdminsModalProps> = ({ onClose })
       );
     });
   }, [allRegisteredUsers, currentAdminIds, filterTab, searchTerm]);
+
+  if (!activeChampionship) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">

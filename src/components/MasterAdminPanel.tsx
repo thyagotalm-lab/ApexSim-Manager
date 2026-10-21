@@ -191,6 +191,53 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
     return Array.from(uniqueMap.values());
   }, [backendUsers, users, championships]);
 
+  // Filtered & Sorted Users
+  const filteredUsers = useMemo(() => {
+    return allConsolidatedUsers.filter((u) => {
+      // Search term match
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const nameMatch = (u.name || '').toLowerCase().includes(q);
+        const emailMatch = (u.email || '').toLowerCase().includes(q);
+        const idMatch = (u.id || '').toLowerCase().includes(q);
+        const teamMatch = (u.teamName || '').toLowerCase().includes(q) || (u.teamTag || '').toLowerCase().includes(q);
+        const gamingMatch = (u.gamingId || '').toLowerCase().includes(q) || (u.steamId || '').toLowerCase().includes(q);
+        const platformMatch = (u.gamingPlatform || '').toLowerCase().includes(q);
+        if (!nameMatch && !emailMatch && !idMatch && !teamMatch && !gamingMatch && !platformMatch) {
+          return false;
+        }
+      }
+
+      // Role filter
+      if (roleFilter === 'PILOT') {
+        if (u.role === 'admin' || u.email.toLowerCase().trim() === 'thyago.talm@gmail.com') return false;
+      } else if (roleFilter === 'ADMIN') {
+        if (u.role !== 'admin' && u.email.toLowerCase().trim() !== 'thyago.talm@gmail.com') return false;
+      }
+
+      // Platform filter
+      if (platformFilter !== 'ALL') {
+        const p = (u.gamingPlatform || '').toLowerCase();
+        if (platformFilter === 'PC' && !p.includes('pc') && !p.includes('steam')) return false;
+        if (platformFilter === 'PS5' && !p.includes('playstation') && !p.includes('ps5') && !p.includes('ps4')) return false;
+        if (platformFilter === 'XBOX' && !p.includes('xbox')) return false;
+      }
+
+      return true;
+    }).sort((a, b) => {
+      if (sortBy === 'NAME') {
+        return a.name.localeCompare(b.name);
+      }
+      if (sortBy === 'SIM_RATING') {
+        return (b.stats?.simRating || 0) - (a.stats?.simRating || 0);
+      }
+      // RECENT: Thyago always first, then by ID or timestamp
+      if (a.email.toLowerCase().trim() === 'thyago.talm@gmail.com') return -1;
+      if (b.email.toLowerCase().trim() === 'thyago.talm@gmail.com') return 1;
+      return b.id.localeCompare(a.id);
+    });
+  }, [allConsolidatedUsers, searchQuery, roleFilter, platformFilter, sortBy]);
+
   // Security Check: strictly restrict to thyago.talm@gmail.com
   const isMasterAdmin = currentUser?.email?.toLowerCase().trim() === 'thyago.talm@gmail.com';
 
@@ -386,53 +433,6 @@ export const MasterAdminPanel: React.FC<MasterAdminPanelProps> = ({ onNavigateTo
       setIsSavingEdit(false);
     }
   };
-
-  // Filtered & Sorted Users
-  const filteredUsers = useMemo(() => {
-    return allConsolidatedUsers.filter((u) => {
-      // Search term match
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const nameMatch = (u.name || '').toLowerCase().includes(q);
-        const emailMatch = (u.email || '').toLowerCase().includes(q);
-        const idMatch = (u.id || '').toLowerCase().includes(q);
-        const teamMatch = (u.teamName || '').toLowerCase().includes(q) || (u.teamTag || '').toLowerCase().includes(q);
-        const gamingMatch = (u.gamingId || '').toLowerCase().includes(q) || (u.steamId || '').toLowerCase().includes(q);
-        const platformMatch = (u.gamingPlatform || '').toLowerCase().includes(q);
-        if (!nameMatch && !emailMatch && !idMatch && !teamMatch && !gamingMatch && !platformMatch) {
-          return false;
-        }
-      }
-
-      // Role filter
-      if (roleFilter === 'PILOT') {
-        if (u.role === 'admin' || u.email.toLowerCase().trim() === 'thyago.talm@gmail.com') return false;
-      } else if (roleFilter === 'ADMIN') {
-        if (u.role !== 'admin' && u.email.toLowerCase().trim() !== 'thyago.talm@gmail.com') return false;
-      }
-
-      // Platform filter
-      if (platformFilter !== 'ALL') {
-        const p = (u.gamingPlatform || '').toLowerCase();
-        if (platformFilter === 'PC' && !p.includes('pc') && !p.includes('steam')) return false;
-        if (platformFilter === 'PS5' && !p.includes('playstation') && !p.includes('ps5') && !p.includes('ps4')) return false;
-        if (platformFilter === 'XBOX' && !p.includes('xbox')) return false;
-      }
-
-      return true;
-    }).sort((a, b) => {
-      if (sortBy === 'NAME') {
-        return a.name.localeCompare(b.name);
-      }
-      if (sortBy === 'SIM_RATING') {
-        return (b.stats?.simRating || 0) - (a.stats?.simRating || 0);
-      }
-      // RECENT: Thyago always first, then by ID or timestamp
-      if (a.email.toLowerCase().trim() === 'thyago.talm@gmail.com') return -1;
-      if (b.email.toLowerCase().trim() === 'thyago.talm@gmail.com') return 1;
-      return b.id.localeCompare(a.id);
-    });
-  }, [allConsolidatedUsers, searchQuery, roleFilter, platformFilter, sortBy]);
 
   // Execute Complete Purge
   const handleConfirmDelete = async () => {

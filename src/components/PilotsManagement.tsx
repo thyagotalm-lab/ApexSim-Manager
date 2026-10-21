@@ -51,33 +51,21 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
     canUserJoinChampionship,
   } = useChampionships();
 
-  if (!activeChampionship) {
-    return (
-      <div className="p-12 text-center bg-slate-900/40 rounded-2xl border border-slate-800 space-y-3">
-        <Users className="w-12 h-12 text-slate-600 mx-auto" />
-        <h3 className="text-base font-bold text-white">Nenhum campeonato ativo no momento</h3>
-        <p className="text-xs text-slate-400 max-w-md mx-auto">
-          Crie seu próprio campeonato manualmente para gerenciar as inscrições, homologações e o grid de pilotos.
-        </p>
-      </div>
-    );
-  }
-
   // Simulator Official Teams (F1 24, F1 25, F1 26, etc.)
   const officialTeams = useMemo(() => {
-    return getTeamsBySimulator(activeChampionship.simulator);
-  }, [activeChampionship.simulator]);
+    return getTeamsBySimulator(activeChampionship?.simulator || 'F1 24');
+  }, [activeChampionship?.simulator]);
 
   // Map of taken car numbers -> pilot name
   const takenCarNumbersMap = useMemo(() => {
     const map = new Map<number, string>();
-    activeChampionship.registrations.forEach((r) => {
+    (activeChampionship?.registrations || []).forEach((r) => {
       if (r.status !== 'REJEITADO') {
         map.set(Number(r.carNumber), r.userName);
       }
     });
     return map;
-  }, [activeChampionship.registrations]);
+  }, [activeChampionship?.registrations]);
 
   const getFirstAvailableNumber = () => {
     for (let i = 1; i <= 99; i++) {
@@ -150,20 +138,20 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
     setEditingPilot(null);
   };
 
-  const isAdmin = isUserLeagueAdmin(activeChampionship.id, currentUser?.id);
-  const userRegistration = activeChampionship.registrations.find((r) => r.userId === currentUser?.id);
-  const approvedPilots = activeChampionship.registrations.filter((r) => r.status === 'APROVADO' && !r.isReserve && !isDeletedUserAccount(r));
-  const pendingPilots = activeChampionship.registrations.filter((r) => r.status === 'PENDENTE' && !isDeletedUserAccount(r));
-  const reservePilots = activeChampionship.registrations.filter((r) => (r.status === 'RESERVA' || r.isReserve) && !isDeletedUserAccount(r));
-  const allGridPilots = activeChampionship.registrations.filter((r) => (r.status === 'APROVADO' || r.status === 'RESERVA') && !isDeletedUserAccount(r));
+  const isAdmin = activeChampionship ? isUserLeagueAdmin(activeChampionship.id, currentUser?.id) : false;
+  const userRegistration = activeChampionship ? activeChampionship.registrations.find((r) => r.userId === currentUser?.id) : undefined;
+  const approvedPilots = activeChampionship ? activeChampionship.registrations.filter((r) => r.status === 'APROVADO' && !r.isReserve && !isDeletedUserAccount(r)) : [];
+  const pendingPilots = activeChampionship ? activeChampionship.registrations.filter((r) => r.status === 'PENDENTE' && !isDeletedUserAccount(r)) : [];
+  const reservePilots = activeChampionship ? activeChampionship.registrations.filter((r) => (r.status === 'RESERVA' || r.isReserve) && !isDeletedUserAccount(r)) : [];
+  const allGridPilots = activeChampionship ? activeChampionship.registrations.filter((r) => (r.status === 'APROVADO' || r.status === 'RESERVA') && !isDeletedUserAccount(r)) : [];
 
-  const displayedGridPilots = activeChampionship.registrations.filter((r) => {
+  const displayedGridPilots = activeChampionship ? activeChampionship.registrations.filter((r) => {
     if (isDeletedUserAccount(r)) return false;
     if (r.status === 'PENDENTE' || r.status === 'REJEITADO') return false;
     if (gridFilter === 'TITULAR') return r.status === 'APROVADO' && !r.isReserve;
     if (gridFilter === 'RESERVA') return r.status === 'RESERVA' || r.isReserve;
     return r.status === 'APROVADO' || r.status === 'RESERVA';
-  });
+  }) : [];
 
   // Search query for pilot in admin add modal
   const [pilotSearchQuery, setPilotSearchQuery] = useState('');
@@ -239,13 +227,15 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
       );
 
       // Check if they are already in the active championship
-      const isInActiveChamp = activeChampionship.registrations.some(
-        (r) =>
-          (r.userId && r.userId.toLowerCase().trim() === cleanId) ||
-          (r.userEmail && r.userEmail.toLowerCase().trim() === cleanEmail)
-      );
+      const isInActiveChamp = activeChampionship
+        ? activeChampionship.registrations.some(
+            (r) =>
+              (r.userId && r.userId.toLowerCase().trim() === cleanId) ||
+              (r.userEmail && r.userEmail.toLowerCase().trim() === cleanEmail)
+          )
+        : false;
 
-      const otherChamps = enrolledChamps.filter((c) => c.id !== activeChampionship.id);
+      const otherChamps = enrolledChamps.filter((c) => c.id !== activeChampionship?.id);
       const isLimitReached = !isInActiveChamp && otherChamps.length >= MAX_CHAMPIONSHIPS_PER_PILOT;
       const canEnroll = !isInActiveChamp && !isLimitReached;
 
@@ -339,7 +329,7 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
 
   const handleAdminEnroll = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUserId || !selectedTeamName) return;
+    if (!selectedUserId || !selectedTeamName || !activeChampionship) return;
 
     if (carNumberInput < 1 || carNumberInput > 99) {
       setAdminNumberError('O número deve ser estritamente de 1 a 99.');
@@ -369,7 +359,7 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
 
   const handleSelfRegister = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser) return;
+    if (!currentUser || !activeChampionship) return;
 
     if (pilotNumber < 1 || pilotNumber > 99) {
       setPilotNumberError('O número deve ser estritamente de 1 a 99.');
@@ -392,6 +382,18 @@ export const PilotsManagement: React.FC<PilotsManagementProps> = ({
 
     setIsSelfRegisterModalOpen(false);
   };
+
+  if (!activeChampionship) {
+    return (
+      <div className="p-12 text-center bg-slate-900/40 rounded-2xl border border-slate-800 space-y-3">
+        <Users className="w-12 h-12 text-slate-600 mx-auto" />
+        <h3 className="text-base font-bold text-white">Nenhum campeonato ativo no momento</h3>
+        <p className="text-xs text-slate-400 max-w-md mx-auto">
+          Crie seu próprio campeonato manualmente para gerenciar as inscrições, homologações e o grid de pilotos.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
