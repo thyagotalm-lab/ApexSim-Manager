@@ -422,7 +422,7 @@ export const syncUsersToBackend = async (users: User[]): Promise<void> => {
 
 // Save or update user in Firestore
 export const saveUserToFirestore = async (user: User): Promise<void> => {
-  if (isFakeMockUser(user)) return;
+  if (!user || !user.id || isFakeMockUser(user)) return;
   if (isFirestoreQuotaExceeded()) {
     return;
   }
@@ -495,9 +495,11 @@ export const syncBackendWithFirestore = async (): Promise<User[]> => {
         if (u && u.email && !isFakeMockUser(u)) {
           const emailKey = u.email.toLowerCase().trim();
           const existing = mergedMap.get(emailKey);
+          const avatarToUse = u.avatar || existing?.avatar || '';
           mergedMap.set(emailKey, {
             ...existing,
             ...u,
+            avatar: avatarToUse,
             id: docSnap.id || u.id,
           });
         }

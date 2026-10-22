@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { UserCheck, Trophy, Award, Zap, Shield, Flag, CheckCircle2, TrendingUp, Edit3, Save, Camera, Gamepad2, AlertCircle, Sparkles, Swords, Bell, Smartphone, Check } from 'lucide-react';
+import { UserCheck, Trophy, Award, Zap, Shield, Flag, CheckCircle2, TrendingUp, Edit3, Save, Camera, Gamepad2, AlertCircle, Sparkles, Swords, Bell, Smartphone, Check, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useChampionships, MAX_CHAMPIONSHIPS_PER_PILOT } from '../context/ChampionshipContext';
 import { calculateDriverStandings } from '../utils/standings';
@@ -24,6 +24,8 @@ export const DriverProfileView: React.FC<DriverProfileViewProps> = ({
   const { championships, setActiveChampionshipId, isUserLeagueAdmin, getDriverCommunityTrophies } = useChampionships();
 
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [name, setName] = useState(currentUser?.name || '');
   const [avatar, setAvatar] = useState(currentUser?.avatar || '');
@@ -78,26 +80,70 @@ export const DriverProfileView: React.FC<DriverProfileViewProps> = ({
   const simRatingTier = getSimRatingTier(stats.simRating);
   const communityTrophies = getDriverCommunityTrophies(currentUser.id);
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateUser({
-      ...currentUser,
-      name,
-      avatar: avatar || currentUser.avatar,
-      gamingPlatform,
-      gamingId: gamingId.trim(),
-      steamId: gamingId.trim(),
-      country,
-      discordTag,
-      teamName: teamName.trim() || undefined,
-      teamTag: teamTag.trim().toUpperCase() || undefined,
-      driverCategory: simRatingTier.name as any,
-    });
-    setIsEditing(false);
+    setIsSaving(true);
+    setSaveFeedback(null);
+    try {
+      await updateUser({
+        ...currentUser,
+        name: name.trim(),
+        avatar: avatar || currentUser.avatar,
+        gamingPlatform,
+        gamingId: gamingId.trim(),
+        steamId: gamingId.trim(),
+        country,
+        discordTag: discordTag.trim(),
+        teamName: teamName.trim() || undefined,
+        teamTag: teamTag.trim().toUpperCase() || undefined,
+        driverCategory: simRatingTier.name as any,
+      });
+
+      setIsSaving(false);
+      setIsEditing(false);
+      setSaveFeedback({
+        type: 'success',
+        message: 'Perfil atualizado e sincronizado com sucesso! Suas alterações já foram confirmadas para você e para os outros pilotos.',
+      });
+      setTimeout(() => setSaveFeedback(null), 6000);
+    } catch (err: any) {
+      setIsSaving(false);
+      setSaveFeedback({
+        type: 'error',
+        message: err.message || 'Erro ao salvar alterações no perfil.',
+      });
+    }
   };
 
   return (
     <div className="space-y-6">
+      {/* Success / Error Feedback Banner */}
+      {saveFeedback && (
+        <div
+          className={`p-3.5 rounded-xl border flex items-center justify-between gap-3 text-xs shadow-lg animate-in fade-in duration-200 ${
+            saveFeedback.type === 'success'
+              ? 'bg-emerald-950/90 border-emerald-600/80 text-emerald-200'
+              : 'bg-red-950/90 border-red-700/80 text-red-200'
+          }`}
+        >
+          <div className="flex items-center gap-2.5">
+            {saveFeedback.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
+            )}
+            <span className="font-semibold">{saveFeedback.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSaveFeedback(null)}
+            className="text-xs opacity-70 hover:opacity-100 cursor-pointer p-1"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Driver License Card (FIA / ApexSim Style) */}
       <div className="relative overflow-hidden rounded-2xl border border-red-900/40 bg-gradient-to-br from-slate-900 via-[#0d131f] to-slate-950 p-4 sm:p-6 md:p-8 shadow-2xl">
         <div className="absolute top-0 right-0 w-80 h-80 bg-red-600/10 rounded-full blur-3xl pointer-events-none" />
@@ -395,16 +441,26 @@ export const DriverProfileView: React.FC<DriverProfileViewProps> = ({
                   setName(currentUser.name);
                   setIsEditing(false);
                 }}
-                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium cursor-pointer"
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 text-xs font-medium cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white font-semibold text-xs px-4 py-2 rounded-lg cursor-pointer shadow-md shadow-red-950"
+                disabled={isSaving}
+                className="flex items-center gap-1.5 bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white font-semibold text-xs px-4 py-2 rounded-lg cursor-pointer shadow-md shadow-red-950 transition-all"
               >
-                <Save className="w-3.5 h-3.5" />
-                <span>Salvar Informações</span>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Salvando Informações...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Salvar Informações</span>
+                  </>
+                )}
               </button>
             </div>
           </form>

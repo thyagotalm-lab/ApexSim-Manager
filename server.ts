@@ -681,8 +681,17 @@ const handleUpdateUser = (req: any, res: any) => {
     users[idx] = updatedUser;
     writeUsersToFile(users);
 
-    // If ID or name changed, propagate across ALL championships data: registrations, stage results, awards, protests
-    if (updatedId !== id || updates.name) {
+    // If ID, name, avatar, or gaming details changed, propagate across ALL championships data: registrations, stage results, awards, protests
+    const hasProfileChanges =
+      updatedId !== id ||
+      Boolean(updates.name) ||
+      Boolean(updates.avatar) ||
+      Boolean(updates.country) ||
+      Boolean(updates.gamingPlatform) ||
+      Boolean(updates.gamingId || updates.steamId) ||
+      Boolean(updates.discordTag);
+
+    if (hasProfileChanges) {
       try {
         const champs = readChampionshipsFromFile();
         let champModified = false;
@@ -702,6 +711,21 @@ const handleUpdateUser = (req: any, res: any) => {
                 reg.userId = updatedId;
                 if (newName) {
                   reg.userName = newName;
+                }
+                if (updates.avatar) {
+                  reg.avatar = updates.avatar;
+                }
+                if (updates.country) {
+                  reg.country = updates.country;
+                }
+                if (updates.gamingPlatform) {
+                  reg.platform = updates.gamingPlatform;
+                }
+                if (updates.gamingId || updates.steamId) {
+                  reg.steamGuid = updates.gamingId || updates.steamId;
+                }
+                if (updates.discordTag) {
+                  reg.discord = updates.discordTag;
                 }
                 champModified = true;
               }

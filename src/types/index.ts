@@ -161,6 +161,9 @@ export interface RegistrationPilot {
   registeredAt: string;
   discord: string;
   steamGuid?: string;
+  avatar?: string;
+  country?: string;
+  platform?: string;
 }
 
 export type ProtestStatus = 'PENDENTE' | 'EM_ANALISE' | 'DEFERIDO' | 'INDEFERIDO';

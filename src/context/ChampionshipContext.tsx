@@ -778,6 +778,9 @@ export const ChampionshipProvider: React.FC<{ children: React.ReactNode }> = ({ 
       registeredAt: new Date().toISOString(),
       discord: user.discordTag || '',
       steamGuid: user.steamId || user.gamingId || '',
+      avatar: user.avatar || '',
+      country: user.country || 'Brasil 🇧🇷',
+      platform: user.gamingPlatform || 'Steam (PC)',
     };
 
     mutateChampionship(championshipId, (c) => {

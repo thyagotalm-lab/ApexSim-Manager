@@ -36,7 +36,7 @@ interface AuthContextType {
   }) => User;
   switchUser: (userId: string) => void;
   logout: () => void;
-  updateUser: (updated: User) => void;
+  updateUser: (updated: User) => Promise<{ success: boolean; error?: string }>;
   resetPilotStats: (userId: string) => void;
   resetAllSimRatingStats: () => Promise<{ success: boolean; error?: string }>;
   syncUsers: () => Promise<void>;
@@ -140,7 +140,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               map.set(key, u);
             }
           });
-          return Array.from(map.values()).map(sanitizeUserProfileTeams);
+          const freshUsers = Array.from(map.values()).map(sanitizeUserProfileTeams);
+          setCurrentUser((current) => {
+            if (!current) return null;
+            const updated = freshUsers.find(
+              (u) =>
+                u.id === current.id ||
+                (u.email && current.email && u.email.toLowerCase().trim() === current.email.toLowerCase().trim())
+            );
+            return updated ? updated : current;
+          });
+          return freshUsers;
         });
       }
     });
@@ -181,6 +191,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const cleanUsers = sanitized.map(sanitizeUserProfileTeams);
         setUsers(cleanUsers);
+        setCurrentUser((current) => {
+          if (!current) return null;
+          const updated = cleanUsers.find(
+            (u) =>
+              u.id === current.id ||
+              (u.email && current.email && u.email.toLowerCase().trim() === current.email.toLowerCase().trim())
+          );
+          return updated ? updated : current;
+        });
         try {
           localStorage.setItem('apexsim_users_db', JSON.stringify(cleanUsers));
         } catch (_) {}
@@ -374,21 +393,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(null);
   };
 
-  const updateUser = (updated: User) => {
-    setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
-    if (currentUser?.id === updated.id) {
-      setCurrentUser(updated);
+  const updateUser = async (updated: User): Promise<{ success: boolean; error?: string }> => {
+    const sanitized = sanitizeUserProfileTeams(updated);
+
+    // 1. Update users list in React state immediately (matching by ID OR email)
+    setUsers((prev) =>
+      prev.map((u) => {
+        const matches =
+          u.id === sanitized.id ||
+          (u.email && sanitized.email && u.email.toLowerCase().trim() === sanitized.email.toLowerCase().trim());
+        return matches ? sanitized : u;
+      })
+    );
+
+    // 2. Update currentUser in React state immediately (matching by ID OR email)
+    setCurrentUser((prev) => {
+      if (!prev) return null;
+      const matches =
+        prev.id === sanitized.id ||
+        (prev.email && sanitized.email && prev.email.toLowerCase().trim() === sanitized.email.toLowerCase().trim());
+      return matches ? sanitized : prev;
+    });
+
+    // 3. Persist to localStorage cache with safe error handling
+    try {
+      const saved = localStorage.getItem('apexsim_users_db');
+      if (saved) {
+        const list = JSON.parse(saved);
+        if (Array.isArray(list)) {
+          const updatedList = list.map((u: User) => {
+            const matches =
+              u.id === sanitized.id ||
+              (u.email && sanitized.email && u.email.toLowerCase().trim() === sanitized.email.toLowerCase().trim());
+            return matches ? sanitized : u;
+          });
+          if (!updatedList.some((u: User) => u.id === sanitized.id)) {
+            updatedList.push(sanitized);
+          }
+          localStorage.setItem('apexsim_users_db', JSON.stringify(updatedList));
+        }
+      }
+    } catch (lsErr) {
+      console.warn('localStorage quota warning on user update:', lsErr);
     }
 
-    // Update in Firestore
-    saveUserToFirestore(updated).catch((err) => console.warn('Firestore update error:', err));
+    // 4. Update in backend server database
+    try {
+      await fetch(`/api/users/${encodeURIComponent(sanitized.id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sanitized),
+      });
+    } catch (err) {
+      console.warn('Backend API update error:', err);
+    }
 
-    // Update in backend server database
-    fetch(`/api/users/${updated.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated),
-    }).catch((err) => console.warn('Backend API update error:', err));
+    // 5. Update in Firestore real-time database
+    try {
+      await saveUserToFirestore(sanitized);
+    } catch (err) {
+      console.warn('Firestore update error:', err);
+    }
+
+    return { success: true };
   };
 
   const resetPilotStats = (userId: string) => {
